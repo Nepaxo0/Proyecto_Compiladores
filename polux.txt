@@ -1,0 +1,101 @@
+start: statement
+
+single_line_comment: ">>" comment_text "\n"
+multi_line_comment: "<< " comment_text " >>"
+documentation_comment: "<<*" comment_text "*>>"
+comment_text: char+
+char: "a" | "b" | "c" | "d" | "e" | "f" | "g" | "h" | "i" | "j"
+     | "k" | "l" | "m" | "n" | "o" | "p" | "q" | "r" | "s" | "t"
+     | "u" | "v" | "w" | "x" | "y" | "z" | "A" | "B" | "C" | "D"
+     | "E" | "F" | "G" | "H" | "I" | "J" | "K" | "L" | "M" | "N"
+     | "O" | "P" | "Q" | "R" | "S" | "T" | "U" | "V" | "W" | "X"
+     | "Y" | "Z" | "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7"
+     | "8" | "9" | " " | "_" | "." | "," | ";" | ":" | "!" | "?"
+     | "+" | "-" | "/" | "*" | "(" | ")" | "{" | "}" | "<" | ">"
+
+identifier: letter identifier_tail
+identifier_tail: (letter | digit | "_") identifier_tail | 
+identifier_list: "[" identifier identifier_list_tail "]"
+identifier_list_tail:  "," identifier identifier_list_tail |
+letter: "a" | "b" | "c" | "d" | "e" | "f" | "g" | "h" | "i" | "j"
+      | "k" | "l" | "m" | "n" | "o" | "p" | "q" | "r" | "s" | "t"
+      | "u" | "v" | "w" | "x" | "y" | "z" | "A" | "B" | "C" | "D"
+      | "E" | "F" | "G" | "H" | "I" | "J" | "K" | "L" | "M" | "N"
+      | "O" | "P" | "Q" | "R" | "S" | "T" | "U" | "V" | "W" | "X"
+      | "Y" | "Z"
+digit: "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9"
+primitive_type: "int" | "float" | "bool" | "char"
+composite_type: "string" | array_type | struct_type
+struct_type: "block" "||" variable_declaration_list "||"
+variable_declaration_list: variable_declaration ";" variable_declaration_list | 
+user_defined_type: entity_declaration | contract_declaration | set_declaration
+entity_declaration: "entity" "||" entity_body "||"
+entity_body: variable_declaration ";" entity_body | method_declaration
+contract_declaration: "contract" "||" method_signature_list "||"
+method_signature_list: method_signature method_signature_list |
+set_declaration: "set" "||" identifier_list "||"
+alias_declaration:"alitas" "=" ";"
+variable_declaration: "var" ("=")? ("@")? ("#")?
+constant_declaration: "cte" ("=")? ("@")? ("#")?
+tipo_unidad: "univ" | "mod" | "bloc"
+duracion: "short" | "long" | "perma"
+booleano: "True" | "False"
+arithmetic_operator: "+" | "-" | "*" | "//" | "%" | "^"
+relational_operator:  "<" | ">" | "<=" | ">=" | "==" | "!="
+assignment_operator: "=" | "more=" | "less=" | "mul=" | "div="
+logical_operator: "AND" | "OR" | "!"
+switch_statement: "switch" "(" ")" "||" case_clause+ ("default" statement_block "||")?
+
+case_clause: "case" statement_block "||"
+statement_block: "||" | statement+ "||"
+break_statement: "stop"
+continue_statement:  "skip"
+return_statement: "return" | "return" expression
+
+control_structure:  if_statement | while_loop | for_loop | do_while_statement
+while_loop:  "while" "(" expression ")" "||" statement_block "||"
+do_while_statement: "do" "||" statement_block "||" "while" "(" expression ")" "||"
+for_loop: "for" "(" identifier  "in" expression ")" "||" statement_block "||"
+if_statement:  "if" "(" expression ")" "||" statement_block "||" else_clause?
+else_clause: "else" "||" statement_block "||"
+function_declaration: "do function" "(" parameter_list? ")" "||" statement_block"||"
+method_declaration: "do method" "(" parameter_list? ")" "||" statement_block "||"
+parameter_list:  parameter ("," parameter)*
+parameter: type identifier 
+function_overloading:  "overload" "||" function_declaration+ "||"
+try_catch_statement:"try" statement_block "||" "catch" "(" ")" statement_block"||"
+
+throw_statement: "throw" "(" ")" | "throw" "(" expression ")"
+exception_declaration:  "exception" "||" statement_block "||"
+import_statement:  "use" identifier  ("." identifier )*
+export_statement:  "export" identifier  ("." identifier )*
+package_declaration: "package" "||" statement_block "||"
+realm_declaration: "realm" "||" (function_declaration | method_declaration |variable_declaration)* "||"
+dependency_declaration:  "dependency" string_literal
+
+class_declaration: "class" ("inherits" identifier )? "||" class_body "||"
+class_body: (variable_declaration | method_declaration |constructor_declaration)*
+constructor_declaration: "do" "(" parameter_list? ")" "||" statement_block "||"
+access_modifier: "public" | "private" | "protected"
+interface_declaration: "interface" "||" method_signature* "||"
+method_signature:  "do function" "(" parameter_list? ")"
+abstract_class_declaration: "abstract" "class" "||" class_body "||"
+inheritance: "inherits" identifier 
+polymorphism:  method_declaration ("overrides" identifier )?
+encapsulation: access_modifier variable_declaration
+array_type: "array" "[" "," "]"
+list_type: "list" "[" "]"
+dictionary_type: "dict" "[" "," "]"
+read_statement: "obtain"
+print_statement: "show" "(" ")"
+statement: variable_declaration | expression | method_call | control_structure
+expression: identifier  | integer | string_literal | booleano | arithmetic_expression | logical_expression
+arithmetic_expression:  expression arithmetic_operator expression
+logical_expression: expression logical_operator expression
+
+
+type: primitive_type | composite_type | user_defined_type
+string_literal: /"[^"]*"/
+method_call: identifier "(" ( argument_list )? ")"
+argument_list:  expression ( "," expression )*
+integer:  ( "-" )? digit+

@@ -5,7 +5,7 @@ from lark.exceptions import UnexpectedInput
 
 # Cargar la gramática desde el archivo EBNF
 try:
-    with open("ebnf1.txt", "r") as file:
+    with open("polux.txt", "r") as file:
         grammar = file.read()
     parser = Lark(grammar, parser="lalr")
     print("Gramática válida")
