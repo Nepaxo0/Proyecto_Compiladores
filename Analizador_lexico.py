@@ -51,7 +51,7 @@ def analizar():
 # Crear la ventana principal
 ventana = tk.Tk()
 ventana.title("Analizador Léxico")
-ventana.geometry("900x600")
+ventana.geometry("900x700")
 ventana.configure(bg="#447091")
 
 
