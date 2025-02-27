@@ -1,39 +1,42 @@
 start: statement+
+single_line_comment: ">>" comment_text "\n"
+multi_line_comment: "<<" comment_text ">>"
+documentation_comment: "<<*" comment_text "*>>"
+comment_text: char+
+char: LETTER | DIGIT | " " | "_" | "." | "," | ";" | ":" | "!" | "?" | "+" | "-" | "/" | "*" | "(" | ")" | "{" | "}" | "<" | ">"
+identifier: LETTER (LETTER | DIGIT | "_")*
+identifier_list: "[" identifier ("," identifier)* "]"
+primitive_type: "int" | "float" | "bool" | "char"
+composite_type: "string" | array_type | struct_type
+array_type: "array" "[" type "]"
+struct_type: "block" "||" variable_declaration_list "||"
+variable_declaration_list: (variable_declaration ";")*
+variable_declaration: "var" identifier ("=" expression)? ";"
+constant_declaration: "cte" identifier "=" expression ";"
+expression: identifier | integer | string_literal | booleano | arithmetic_expression | logical_expression
+arithmetic_expression: expression arithmetic_operator expression
+logical_expression: expression logical_operator expression
+arithmetic_operator: "+" | "-" | "*" | "/" | "%" | "^"
+relational_operator: "<" | ">" | "<=" | ">=" | "==" | "!="
+assignment_operator: "=" | "+=" | "-=" | "*=" | "/="
+logical_operator: "AND" | "OR" | "NOT"
+control_structure: if_statement | while_loop | for_loop
+if_statement: "if" "(" expression ")" "||" statement_block "||" else_clause?
+else_clause: "else" "||" statement_block "||"
+while_loop: "while" "(" expression ")" "||" statement_block "||"
+for_loop: "for" "(" identifier "in" expression ")" "||" statement_block "||"
+statement_block: "||" statement+ "||"
+statement: variable_declaration | expression | method_call | control_structure
+method_call: identifier "(" argument_list? ")" ";"
+argument_list: expression ("," expression)*
+string_literal: "\"" char* "\""
+integer: DIGIT+
+type: primitive_type | composite_type
+LETTER: /[a-zA-Z]/
+DIGIT: /[0-9]/
+booleano: "True" | "False"
 
-while_stmt: "while" condition "do" statement+ "end"
-
-if_stmt: "if" condition "then" statement+ "end"
-       | "if" condition "then" statement+ "else" statement+ "end"
-
-condition: expr relop expr
-
-relop: "<" | ">" | "==" | "!=" | "<=" | ">="
-
-statement: assignment | while_stmt | if_stmt | block
-
-block: "{" statement+ "}"
-
-assignment: identifier ":=" expr
-
-expr: expr addop term  -> binary
-    | term
-
-term: term mulop factor -> binary
-    | factor
-
-factor: identifier
-      | number
-      | "(" expr ")"
-
-addop: "+" | "-"
-
-mulop: "*" | "/"
-
-identifier: CNAME
-
-number: SIGNED_NUMBER
-
-%import common.CNAME
-%import common.SIGNED_NUMBER
-%import common.WS
-%ignore WS
+%ignore " "
+%ignore "\t"
+%ignore "\n"
+%ignore "\r"
