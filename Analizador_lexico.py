@@ -54,38 +54,39 @@ ventana.title("Analizador Léxico")
 ventana.geometry("900x700")
 ventana.configure(bg="#447091")
 
-
 style = ttk.Style()
 style.configure("TButton", font=("Times New Roman", 12, "bold italic"), padding=8, relief="flat")
-style.map("TButton",
-          background=[("active", "#E67E22"), ("!disabled", "#D35400")],
-          foreground=[("active", "white"), ("!disabled", "#447091")])
-
+style.map("TButton", background=[("active", "#E67E22"), ("!disabled", "#D35400")], foreground=[("active", "white"), ("!disabled", "#447091")])
 style.configure("TLabel", font=("Times New Roman", 12, "bold italic"), background="#447091", foreground="white")
 style.configure("TFrame", background="#447091")
 
 frame = ttk.Frame(ventana)
 frame.pack(padx=20, pady=20, fill="both", expand=True)
 
-etiqueta_entrada = ttk.Label(frame, text="Ingrese el código fuente:")
-etiqueta_entrada.pack(anchor="w")
+# Marco para centrar los elementos
+contenedor = ttk.Frame(frame)
+contenedor.pack(expand=True)
 
-entrada_texto = scrolledtext.ScrolledText(frame, width=90, height=10, font=("Consolas", 10), bg="#ECF0F1", fg="#1F2833")
+etiqueta_entrada = ttk.Label(contenedor, text="Ingrese el código fuente:")
+etiqueta_entrada.pack(anchor="w", pady=5)
+
+entrada_texto = scrolledtext.ScrolledText(contenedor, width=90, height=10, font=("Consolas", 10), bg="#ECF0F1", fg="#1F2833")
 entrada_texto.pack(pady=5)
 
-boton_analizar = ttk.Button(frame, text="Compilar", command=analizar)
+boton_analizar = ttk.Button(contenedor, text="Compilar", command=analizar)
 boton_analizar.pack(pady=10)
 
-etiqueta_salida = ttk.Label(frame, text="Resultados del análisis léxico:")
-etiqueta_salida.pack(anchor="w")
+etiqueta_salida = ttk.Label(contenedor, text="Resultados del análisis léxico:")
+etiqueta_salida.pack(anchor="w", pady=5)
 
-salida_texto = scrolledtext.ScrolledText(frame, width=90, height=10, font=("Consolas", 10), bg="#ECF0F1", fg="#1F2833", state=tk.DISABLED)
+salida_texto = scrolledtext.ScrolledText(contenedor, width=90, height=10, font=("Consolas", 10), bg="#ECF0F1", fg="#1F2833", state=tk.DISABLED)
 salida_texto.pack(pady=5)
 
-etiqueta_tabla = ttk.Label(frame, text="Tabla de símbolos:")
-etiqueta_tabla.pack(anchor="w")
+etiqueta_tabla = ttk.Label(contenedor, text="Tabla de símbolos:")
+etiqueta_tabla.pack(anchor="w", pady=5)
 
-tabla_simbolos_texto = scrolledtext.ScrolledText(frame, width=90, height=10, font=("Consolas", 10), bg="#ECF0F1", fg="#1F2833", state=tk.DISABLED)
+tabla_simbolos_texto = scrolledtext.ScrolledText(contenedor, width=90, height=10, font=("Consolas", 10), bg="#ECF0F1", fg="#1F2833", state=tk.DISABLED)
 tabla_simbolos_texto.pack(pady=5)
 
 ventana.mainloop()
+
