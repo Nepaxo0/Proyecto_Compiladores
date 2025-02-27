@@ -5,14 +5,12 @@ from lark.exceptions import UnexpectedInput
 
 # Cargar la gramática desde el archivo EBNF
 try:
-    with open("polux.txt", "r") as file:
+    with open("ebnf1.txt", "r") as file:
         grammar = file.read()
     parser = Lark(grammar, parser="lalr")
-    print("Gramática válida")
 except Exception as e:
-    print(f"Error al cargar la gramática: {e}")
+    messagebox.showerror("Error de gramática", f"Error al cargar la gramática: {e}")
     exit(1)
-
 
 # Función para realizar el análisis léxico
 def analizador_lexico(codigo):
@@ -28,7 +26,6 @@ def analizador_lexico(codigo):
         # Capturar errores léxicos
         error_msg = f"Error léxico en línea {error.line}, columna {error.column}: {error}"
         return None, error_msg  # Devuelve ningún token y el mensaje de error
-
 
 # Función para manejar el análisis y mostrar resultados
 def analizar():
@@ -63,7 +60,6 @@ def analizar():
             tabla_simbolos_texto.insert(tk.END, f"{tipo}:\n")
             for valor in valores:
                 tabla_simbolos_texto.insert(tk.END, f"  - {valor}\n")
-
 
 # Crear la ventana principal
 ventana = tk.Tk()
