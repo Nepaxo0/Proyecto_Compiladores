@@ -1,0 +1,83 @@
+start: statement*
+
+single_line_comment: ">>" comment_text "\n"
+multi_line_comment: "<<" comment_text ">>"
+documentation_comment: "<<*" comment_text "*>>"
+comment_text: char+
+char: LETTER | DIGIT | " " | "_" | "." | "," | ";" | ":" | "!" | "?" | "+" | "-" | "/" | "*" | "(" | ")" | "{" | "}" | "<" | ">"
+
+identifier: LETTER (LETTER | DIGIT | "_")*
+identifier_list: "[" identifier ("," identifier)* "]"
+
+primitive_type: "int" | "float" | "bool" | "char"
+composite_type: "string" | array_type | struct_type
+array_type: "array" identifier "[" type "]"
+struct_type: "block" "||" variable_declaration_list "||"
+variable_declaration_list: (variable_declaration ";")*
+variable_declaration: "var" identifier ("=" expression)? ";"
+constant_declaration: "cte" identifier "=" expression ";"
+
+expression: identifier | integer | string_literal | booleano | arithmetic_expression | logical_expression | assignment_expression | relational_expression
+arithmetic_expression: expression arithmetic_operator expression
+logical_expression: expression logical_operator expression
+assignment_expression: expression "=" expression
+relational_expression: expression relational_operator expression
+
+arithmetic_operator: "+" | "-" | "*" | "/" | "%" | "^"
+relational_operator: "<" | ">" | "<=" | ">=" | "==" | "!="
+assignment_operator: "=" | "+=" | "-=" | "*=" | "/="
+logical_operator: "AND" | "OR" | "NOT"
+
+control_structure: if_statement | while_loop | for_loop
+if_statement: "if" "(" expression ")" "||" statement_block "||" else_clause?
+else_clause: "else" "||" statement_block "||"
+while_loop: "while" "(" expression ")" "||" statement_block "||"
+for_loop: "for" "(" identifier "in" expression ")" "||" statement_block "||"
+
+statement_block: statement+ 
+statement: variable_declaration | expression | method_call | control_structure | print_statement
+method_call: identifier "(" argument_list? ")" ";"
+argument_list: expression ("," expression)*
+string_literal: "\"" char* "\""
+integer: DIGIT+
+type: primitive_type | composite_type
+parameter_list: parameter ("," parameter)*
+parameter: type identifier
+
+print_statement: "show" "(" argument_list? ")"
+
+
+class_declaration: "class" ("inherits" identifier )? "||" class_body "||"
+class_body: (variable_declaration | method_declaration |constructor_declaration)*
+constructor_declaration: "do" "(" parameter_list? ")" "||" statement_block "||"
+access_modifier: "public" | "private" | "protected"
+interface_declaration: "interface" "||" method_signature* "||"
+method_signature:  "do function" "(" parameter_list? ")"
+method_declaration: access_modifier type identifier "(" parameter_list? ")" "||" statement_block "||"
+
+
+
+
+LETTER: /[a-zA-Z]/
+DIGIT: SIGNED_NUMBER
+booleano: "True" | "False"
+
+COMMA: ","
+EQUAL: "="
+VAR: "var"
+DOT: "."
+TRUE: "True"
+FALSE: "False"
+
+
+
+%ignore " "
+%ignore "\t"
+%ignore "\n"
+%ignore "\r"
+%ignore />>[^\n]*/                // Ignora todo lo que venga después de '>>' hasta el final de la línea
+%ignore /<<(.|\n)*?>>/            // Ignora comentarios multilínea entre '<<' y '>>'
+%ignore /<<\*(.|\n)*?\*>>/        // Ignora documentación entre '<<*' y '*>>'
+
+
+%import common.SIGNED_NUMBER

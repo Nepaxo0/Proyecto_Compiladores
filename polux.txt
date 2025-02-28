@@ -83,6 +83,7 @@ abstract_class_declaration: "abstract" "class" "||" class_body "||"
 inheritance: "inherits" identifier 
 polymorphism:  method_declaration ("overrides" identifier )?
 encapsulation: access_modifier variable_declaration
+
 array_type: "array" "[" "," "]"
 list_type: "list" "[" "]"
 dictionary_type: "dict" "[" "," "]"
