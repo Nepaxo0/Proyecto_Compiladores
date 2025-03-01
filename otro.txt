@@ -19,9 +19,9 @@ variable_declaration: "var" identifier ("=" expression)?
 constant_declaration: "cte" identifier "=" expression 
 array_literal: "[" expression ("," expression)* "]"
 
-expression: identifier | integer | string_literal | booleano | arithmetic_expression | logical_expression | assignment_expression | relational_expression |instance_creation | array_literal | function_call
+expression: identifier | integer | string_literal | booleano | arithmetic_expression | logical_expression | assignment_expression | relational_expression |instance_creation | array_literal 
 
-function_call: identifier "(" argument_list? ")"
+
 arithmetic_expression: expression arithmetic_operator expression
 logical_expression: expression logical_operator expression
 assignment_expression: expression "=" expression
