@@ -14,18 +14,19 @@ primitive_type: "int" | "float" | "bool" | "char"
 composite_type: "string" | array_type | struct_type
 array_type: "array" identifier "[" type "]"
 struct_type: "block" "||" variable_declaration_list "||"
-variable_declaration_list: (variable_declaration ";")*
+variable_declaration_list: (variable_declaration)*
 variable_declaration: "var" identifier ("=" expression)? 
-constant_declaration: "cte" identifier "=" expression 
+constant_declaration: "cte" identifier "=" expression  
 array_literal: "[" expression ("," expression)* "]"
 
-expression: identifier | integer | string_literal | booleano | arithmetic_expression | logical_expression | assignment_expression | relational_expression |instance_creation | array_literal 
+expression: identifier | integer | string_literal | booleano | arithmetic_expression | logical_expression | assignment_expression | relational_expression |instance_creation | array_literal | grouped_expression
 
 
 arithmetic_expression: expression arithmetic_operator expression
-logical_expression: expression logical_operator expression
-assignment_expression: expression "=" expression
+logical_expression: expression logical_operator expression 
+assignment_expression: expression assignment_operator expression
 relational_expression: expression relational_operator expression
+grouped_expression: "(" expression ")"
 
 arithmetic_operator: "+" | "-" | "*" | "/" | "%" | "^"
 relational_operator: "<" | ">" | "<=" | ">=" | "==" | "!="
@@ -39,7 +40,7 @@ while_loop: "while" "(" expression ")" "||" statement_block "||"
 for_loop: "for" "(" identifier "in" expression ")" "||" statement_block "||"
 
 statement_block: statement*
-statement: variable_declaration | expression | method_call | control_structure | print_statement | class_declaration | function_declaration
+statement: variable_declaration | expression | method_call | control_structure | print_statement | class_declaration | function_declaration | type | interface_declaration  
 argument_list: expression ("," expression)*
 string_literal: "\"" char* "\""    
 method_call: identifier "." identifier "(" argument_list? ")" 
@@ -50,16 +51,16 @@ parameter:  identifier
 
 print_statement: "show" "(" argument_list? ")"
 
-function_declaration: "do" "function" identifier "(" parameter_list? ")" "||" statement_block "||"
+function_declaration: DO "function" identifier "(" parameter_list? ")" "||" statement_block "||"
 
 class_declaration: "class" identifier ("inherits" identifier )?  "||" class_body "||"
 class_body: (variable_declaration | method_declaration | constructor_declaration)*
-constructor_declaration: "do" identifier "(" parameter_list? ")" "||" statement_block "||"
+constructor_declaration: DO identifier "(" parameter_list? ")" "||" statement_block "||"
 access_modifier: "public" | "private" | "protected"
 interface_declaration: "interface" "||" method_signature* "||"
-method_signature:  "do function" "(" parameter_list? ")"
+method_signature:  DO "function" identifier? "(" parameter_list? ")"
 instance_creation: identifier "(" argument_list? ")"
-method_declaration: "do" "function" identifier "(" parameter_list? ")" "||" statement_block "||"
+method_declaration: DO "function" identifier "(" parameter_list? ")" "||" statement_block "||"
 
 
 LETTER: /[a-zA-Z]/
@@ -73,7 +74,7 @@ DOT: "."
 TRUE: "True"
 FALSE: "False"
 PIPE_PIPE: "||"
-
+DO: "do"
 
 
 
