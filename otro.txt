@@ -4,8 +4,9 @@ single_line_comment: ">>" comment_text "\n"
 multi_line_comment: "<<" comment_text ">>"
 documentation_comment: "<<*" comment_text "*>>"
 comment_text: char+
-char: LETTER | DIGIT | " " | "_" | "." | "," | ";" | ":" | "!" | "?" | "+" | "-" | "/" | "*" | "(" | ")" | "{" | "}" | "<" | ">"
 
+
+char: /[^\"]/  // Cualquier carácter excepto comillas dobles
 identifier: LETTER (LETTER | DIGIT | "_")*
 identifier_list: "[" identifier ("," identifier)* "]"
 
@@ -14,10 +15,13 @@ composite_type: "string" | array_type | struct_type
 array_type: "array" identifier "[" type "]"
 struct_type: "block" "||" variable_declaration_list "||"
 variable_declaration_list: (variable_declaration ";")*
-variable_declaration: "var" identifier ("=" expression)? ";"
-constant_declaration: "cte" identifier "=" expression ";"
+variable_declaration: "var" identifier ("=" expression)? 
+constant_declaration: "cte" identifier "=" expression 
+array_literal: "[" expression ("," expression)* "]"
 
-expression: identifier | integer | string_literal | booleano | arithmetic_expression | logical_expression | assignment_expression | relational_expression
+expression: identifier | integer | string_literal | booleano | arithmetic_expression | logical_expression | assignment_expression | relational_expression |instance_creation | array_literal | function_call
+
+function_call: identifier "(" argument_list? ")"
 arithmetic_expression: expression arithmetic_operator expression
 logical_expression: expression logical_operator expression
 assignment_expression: expression "=" expression
@@ -34,28 +38,28 @@ else_clause: "else" "||" statement_block "||"
 while_loop: "while" "(" expression ")" "||" statement_block "||"
 for_loop: "for" "(" identifier "in" expression ")" "||" statement_block "||"
 
-statement_block: statement+ 
-statement: variable_declaration | expression | method_call | control_structure | print_statement | class_declaration
-method_call: identifier "(" argument_list? ")" ";"
+statement_block: statement*
+statement: variable_declaration | expression | method_call | control_structure | print_statement | class_declaration | function_declaration
 argument_list: expression ("," expression)*
-string_literal: "\"" char* "\""     
+string_literal: "\"" char* "\""    
+method_call: identifier "." identifier "(" argument_list? ")" 
 integer: DIGIT+
 type: primitive_type | composite_type
 parameter_list: parameter ("," parameter)*
-parameter: type identifier
+parameter:  identifier
 
 print_statement: "show" "(" argument_list? ")"
 
+function_declaration: "do" "function" identifier "(" parameter_list? ")" "||" statement_block "||"
 
 class_declaration: "class" identifier ("inherits" identifier )?  "||" class_body "||"
-class_body: (variable_declaration | method_declaration |constructor_declaration)*
-constructor_declaration: "do" "(" parameter_list? ")" "||" statement_block "||"
+class_body: (variable_declaration | method_declaration | constructor_declaration)*
+constructor_declaration: "do" identifier "(" parameter_list? ")" "||" statement_block "||"
 access_modifier: "public" | "private" | "protected"
 interface_declaration: "interface" "||" method_signature* "||"
 method_signature:  "do function" "(" parameter_list? ")"
-method_declaration: access_modifier type identifier "(" parameter_list? ")" "||" statement_block "||"
-
-
+instance_creation: identifier "(" argument_list? ")"
+method_declaration: "do" "function" identifier "(" parameter_list? ")" "||" statement_block "||"
 
 
 LETTER: /[a-zA-Z]/
@@ -72,13 +76,14 @@ PIPE_PIPE: "||"
 
 
 
-%ignore " "
+
+
 %ignore "\t"
 %ignore "\n"
 %ignore "\r"
 %ignore />>[^\n]*/                // Ignora todo lo que venga después de '>>' hasta el final de la línea
 %ignore /<<(.|\n)*?>>/            // Ignora comentarios multilínea entre '<<' y '>>'
 %ignore /<<\*(.|\n)*?\*>>/        // Ignora documentación entre '<<*' y '*>>'
-
+%ignore /(?<!\\) /  // Ignora espacios que no estén dentro de cadenas
 
 %import common.SIGNED_NUMBER
