@@ -35,10 +35,10 @@ while_loop: "while" "(" expression ")" "||" statement_block "||"
 for_loop: "for" "(" identifier "in" expression ")" "||" statement_block "||"
 
 statement_block: statement+ 
-statement: variable_declaration | expression | method_call | control_structure | print_statement
+statement: variable_declaration | expression | method_call | control_structure | print_statement | class_declaration
 method_call: identifier "(" argument_list? ")" ";"
 argument_list: expression ("," expression)*
-string_literal: "\"" char* "\""
+string_literal: "\"" char* "\""     
 integer: DIGIT+
 type: primitive_type | composite_type
 parameter_list: parameter ("," parameter)*
@@ -47,7 +47,7 @@ parameter: type identifier
 print_statement: "show" "(" argument_list? ")"
 
 
-class_declaration: "class" ("inherits" identifier )? "||" class_body "||"
+class_declaration: "class" identifier ("inherits" identifier )?  "||" class_body "||"
 class_body: (variable_declaration | method_declaration |constructor_declaration)*
 constructor_declaration: "do" "(" parameter_list? ")" "||" statement_block "||"
 access_modifier: "public" | "private" | "protected"
@@ -68,6 +68,7 @@ VAR: "var"
 DOT: "."
 TRUE: "True"
 FALSE: "False"
+PIPE_PIPE: "||"
 
 
 
