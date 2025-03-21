@@ -85,6 +85,7 @@ def analizador_sintactico(codigo):
         error_msg = (f"Error sintáctico en línea {error.line}, columna {error.column}: {str(error)}\n"
                      f"Se esperaba: {tokens_mostrados if tokens_legibles else 'desconocido'}")
         return None, error_msg
+    
 
 # Función para analizar código y mostrar errores en la interfaz
 def analizar():
@@ -117,12 +118,17 @@ def mostrar_tabla_simbolos():
     simbolos = tabla_simbolos.obtener_todos()
     print(f"Símbolos en tabla: {simbolos}")  # Depuración
     
+    if not simbolos:
+        print("⚠️ No se encontraron símbolos para mostrar en la tabla.")
+    
     for simbolo in simbolos:
+        print(f"Añadiendo símbolo a la tabla: {simbolo}")  # Depuración
         tabla.insert("", "end", values=(simbolo["Identificador"], simbolo["Categoría"], simbolo["Tipo de Dato"],
                                           simbolo["Ámbito"], simbolo["Dirección"], simbolo["Línea"],
                                           simbolo["Valor"], simbolo["Estado"], simbolo["Estructura"], simbolo["Referencias"]))
     
     tabla.pack(expand=True, fill="both")
+
 
 # Configuración de la interfaz gráfica
 ventana = tk.Tk()
