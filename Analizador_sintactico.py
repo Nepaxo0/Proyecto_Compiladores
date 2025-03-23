@@ -45,6 +45,33 @@ class TablaSimbolos:
 # Instancia de la tabla de símbolos
 tabla_simbolos = TablaSimbolos()
 
+# Algoritmo de Shunting Yard para evaluar expresiones matemáticas
+def shunting_yard(expresion):
+    precedencia = {"+": 1, "-": 1, "*": 2, "/": 2, "^": 3}
+    salida = []
+    operadores = []
+    tokens = expresion.split()
+    
+    for token in tokens:
+        if token.isnumeric():
+            salida.append(token)
+        elif token in precedencia:
+            while (operadores and operadores[-1] in precedencia and
+                   precedencia[operadores[-1]] >= precedencia[token]):
+                salida.append(operadores.pop())
+            operadores.append(token)
+        elif token == "(":
+            operadores.append(token)
+        elif token == ")":
+            while operadores and operadores[-1] != "(":
+                salida.append(operadores.pop())
+            operadores.pop()
+    
+    while operadores:
+        salida.append(operadores.pop())
+    
+    return " ".join(salida)
+
 # Función para extraer identificadores y agregarlos a la tabla de símbolos
 def extraer_simbolos(tree):
     print("Extrayendo símbolos...")  # Depuración
@@ -101,6 +128,7 @@ def analizar():
         salida_texto.insert(tk.END, "Código válido. Árbol sintáctico generado correctamente.\n", "success")
 
     salida_texto.config(state=tk.DISABLED)
+
 
 # Función para mostrar la tabla de símbolos en una nueva ventana
 def mostrar_tabla_simbolos():
