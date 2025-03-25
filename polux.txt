@@ -1,5 +1,9 @@
 start: statement*
 
+%import common.WS
+%ignore WS
+
+
 single_line_comment: ">>" comment_text "\n"
 multi_line_comment: "<<" comment_text ">>"
 documentation_comment: "<<*" comment_text "*>>"
