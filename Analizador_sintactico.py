@@ -1,6 +1,7 @@
 from lark import Lark, UnexpectedInput
 import tkinter as tk
 from tkinter import ttk, scrolledtext, Toplevel
+from lark import Lark, UnexpectedInput, Tree, Token
 import pickle
 
 # Cargar la gramática desde el archivo
@@ -73,29 +74,85 @@ def shunting_yard(expresion):
     return " ".join(salida)
 
 # Función para extraer identificadores y agregarlos a la tabla de símbolos
-def extraer_simbolos(tree):
-    print("Extrayendo símbolos...")  # Depuración
-    for node in tree.iter_subtrees():
-        print(f"Nodo: {node.data}")  # Depuración
-        if node.data == "declaracion":  # Suponiendo que las declaraciones están bajo este nodo
-            nombre = node.children[0].value if len(node.children) > 0 else "Desconocido"
-            tipo = node.children[1].value if len(node.children) > 1 else "Desconocido"
-            linea = node.meta.line if hasattr(node, 'meta') else "Desconocida"
+def extraer_simbolos(parse_tree):  # Cambié el parámetro de nombre para evitar confusión
+    print("Extrayendo símbolos del árbol sintáctico...")
+    
+    def get_value(node):
+        """Función auxiliar para obtener el valor de un nodo"""
+        if isinstance(node, Tree):
+            # Para árboles, obtenemos el valor del primer hijo
+            return get_value(node.children[0]) if node.children else ""
+        elif isinstance(node, Token):
+            return node.value
+        return str(node)
+    
+    for node in parse_tree.iter_subtrees():
+        print(f"Procesando nodo: {node.data}")  # Debug
+        
+        try:
+            # Declaraciones de variables
+            if node.data == "variable_declaration":
+                if len(node.children) >= 1:
+                    nombre = get_value(node.children[0])
+                    valor = get_value(node.children[1]) if len(node.children) > 1 else "N/A"
+                    
+                    simbolo = {
+                        "Identificador": nombre,
+                        "Categoría": "Variable",
+                        "Tipo de Dato": "inferido",
+                        "Ámbito": "Global",
+                        "Dirección": f"0x{id(nombre):X}",
+                        "Línea": getattr(node.meta, 'line', 'Desconocida'),
+                        "Valor": valor,
+                        "Estado": "Declarado",
+                        "Estructura": "N/A",
+                        "Referencias": 0
+                    }
+                    tabla_simbolos.agregar(simbolo)
             
-            simbolo = {
-                "Identificador": nombre,
-                "Categoría": "Variable",
-                "Tipo de Dato": tipo,
-                "Ámbito": "Global",  # Se puede mejorar
-                "Dirección": f"0x{id(nombre):X}",
-                "Línea": linea,
-                "Valor": "N/A",
-                "Estado": "Declarado",
-                "Estructura": "N/A",
-                "Referencias": 0
-            }
-            tabla_simbolos.agregar(simbolo)
+            # Declaraciones de funciones
+            elif node.data == "function_declaration":
+                if len(node.children) >= 1:
+                    nombre = get_value(node.children[0])
+                    
+                    simbolo = {
+                        "Identificador": nombre,
+                        "Categoría": "Función",
+                        "Tipo de Dato": "Función",
+                        "Ámbito": "Global",
+                        "Dirección": f"0x{id(nombre):X}",
+                        "Línea": getattr(node.meta, 'line', 'Desconocida'),
+                        "Valor": "N/A",
+                        "Estado": "Definido",
+                        "Estructura": "N/A",
+                        "Referencias": 0
+                    }
+                    tabla_simbolos.agregar(simbolo)
+            
+            # Declaraciones de clases
+            elif node.data == "class_declaration":
+                if len(node.children) >= 1:
+                    nombre = get_value(node.children[0])
+                    
+                    simbolo = {
+                        "Identificador": nombre,
+                        "Categoría": "Clase",
+                        "Tipo de Dato": "Clase",
+                        "Ámbito": "Global",
+                        "Dirección": f"0x{id(nombre):X}",
+                        "Línea": getattr(node.meta, 'line', 'Desconocida'),
+                        "Valor": "N/A",
+                        "Estado": "Definido",
+                        "Estructura": "N/A",
+                        "Referencias": 0
+                    }
+                    tabla_simbolos.agregar(simbolo)
+                    
+        except Exception as e:
+            print(f"Error procesando nodo {node.data}: {e}")
+            continue
 
+        
 # Función para el análisis sintáctico con manejo de errores mejorado
 def analizador_sintactico(codigo):
     try:
@@ -120,15 +177,26 @@ def analizar():
     salida_texto.config(state=tk.NORMAL)
     salida_texto.delete("1.0", tk.END)
 
-    tree, error = analizador_sintactico(codigo)
+    # Limpiar tabla antes de cada análisis
+    tabla_simbolos.limpiar()
     
-    if error:
-        salida_texto.insert(tk.END, f"{error}\n", "error")
-    else:
-        salida_texto.insert(tk.END, "Código válido. Árbol sintáctico generado correctamente.\n", "success")
-
+    try:
+        tree = parser.parse(codigo)
+        salida_texto.insert(tk.END, "Análisis sintáctico exitoso!\n", "success")
+        salida_texto.insert(tk.END, "Estructura del árbol:\n" + tree.pretty() + "\n\n", "info")
+        
+        # Extraer símbolos
+        extraer_simbolos(tree)
+        
+        # Mostrar estadísticas
+        simbolos = tabla_simbolos.obtener_todos()
+        salida_texto.insert(tk.END, f"Símbolos encontrados: {len(simbolos)}\n", "info")
+        
+    except UnexpectedInput as e:
+        error_msg = f"Error en línea {e.line}:{e.column} - {e.get_context(codigo)}"
+        salida_texto.insert(tk.END, error_msg, "error")
+    
     salida_texto.config(state=tk.DISABLED)
-
 
 # Función para mostrar la tabla de símbolos en una nueva ventana
 def mostrar_tabla_simbolos():
