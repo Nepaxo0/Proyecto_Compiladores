@@ -8,7 +8,7 @@ import pickle
 try:
     with open("polux.txt", "r") as file:
         grammar = file.read()
-    parser = Lark(grammar, parser="lalr")
+    parser = Lark(grammar, parser="lalr", propagate_positions=True)
     print("Gramática cargada correctamente.")
 except Exception as e:
     print(f"Error al cargar la gramática: {e}")
@@ -73,11 +73,14 @@ def shunting_yard(expresion):
     
     return " ".join(salida)
 
+
+
+
 # Función para extraer identificadores y agregarlos a la tabla de símbolos
 def extraer_simbolos(tree, ambito="Global"):
     simbolos = []
     variables_globales = set()
-    
+
     def get_identifier(node):
         """Obtiene el identificador completo"""
         if isinstance(node, Token):
@@ -85,41 +88,44 @@ def extraer_simbolos(tree, ambito="Global"):
         return ''.join(get_identifier(child) for child in node.children)
 
     def get_line(node):
-        """Obtiene la línea de declaración"""
-        try:
-            return node.meta.line if hasattr(node, 'meta') and hasattr(node.meta, 'line') else 'N/A'
-        except:
-            return 'N/A'
+        """Obtiene la línea de declaración del nodo"""
+        if hasattr(node, 'meta') and hasattr(node.meta, 'line'):
+            return node.meta.line
+        return 'N/A'
+
+    def determinar_tipo(node):
+        """Determina el tipo de dato basado en el nodo"""
+        if isinstance(node, Token):
+            if node.type in ('NUMBER', 'INTEGER'):
+                return 'int' if '.' not in node.value else 'float'
+            elif node.type == 'STRING_LITERAL':
+                return 'string'
+            elif node.type == 'BOOLEAN':
+                return 'bool'
+        return 'desconocido'
 
     for node in tree.iter_subtrees():
+        print(f"Procesando nodo: {node.data}, Línea: {get_line(node)}")
         current_line = get_line(node)
 
         # Variables globales
-        if node.data == "variable_declaration" and ambito == "Global":
+        if node.data == "variable_declaration":
             if len(node.children) < 1:
                 continue
-                
+
             identificador = get_identifier(node.children[0])
             if identificador in variables_globales:
                 continue
-                
+
             variables_globales.add(identificador)
             tipo = "desconocido"
             valor = "N/A"
-            
+
             if len(node.children) > 1:
                 val_node = node.children[1]
-                if isinstance(val_node, Token):
-                    if val_node.type in ('NUMBER', 'INTEGER'):
-                        tipo = 'int' if '.' not in val_node.value else 'float'
-                        valor = val_node.value
-                    elif val_node.type == 'STRING_LITERAL':
-                        tipo = 'string'
-                        valor = val_node.value
-                    elif val_node.type == 'BOOLEAN':
-                        tipo = 'bool'
-                        valor = val_node.value
-            
+                tipo = determinar_tipo(val_node)
+                valor = get_identifier(val_node)
+
             simbolos.append({
                 "Identificador": identificador,
                 "Categoría": "Variable",
@@ -135,15 +141,33 @@ def extraer_simbolos(tree, ambito="Global"):
 
         # Funciones
         elif node.data == "function_declaration":
-            if len(node.children) < 1:
+            if len(node.children) < 2:
                 continue
-                
+
             identificador = get_identifier(node.children[0])
             params = []
-            
+            current_line = get_line(node)
+
+            # Procesar parámetros
             if len(node.children) > 1 and hasattr(node.children[1], 'data') and node.children[1].data == 'parameter_list':
-                params = [get_identifier(p.children[0]) for p in node.children[1].find_data('parameter')]
-            
+                for param in node.children[1].find_data('parameter'):
+                    param_id = get_identifier(param.children[0])
+                    param_type = determinar_tipo(param.children[1]) if len(param.children) > 1 else 'desconocido'
+                    params.append(f"{param_id}: {param_type}")
+
+                    simbolos.append({
+                        "Identificador": param_id,
+                        "Categoría": "Parámetro",
+                        "Tipo de Dato": param_type,
+                        "Ámbito": identificador,
+                        "Dirección": f"0x{abs(hash(f'{param_id}{identificador}')):X}",
+                        "Línea": get_line(param),
+                        "Valor": "N/A",
+                        "Estado": "Declarado",
+                        "Estructura": "Simple",
+                        "Referencias": 0
+                    })
+
             simbolos.append({
                 "Identificador": identificador,
                 "Categoría": "Función",
@@ -151,38 +175,26 @@ def extraer_simbolos(tree, ambito="Global"):
                 "Ámbito": ambito,
                 "Dirección": f"0x{abs(hash(identificador)):X}",
                 "Línea": current_line,
-                "Valor": f"Parámetros: {', '.join(params)}",
+                "Valor": f"Parámetros: {len(params)}",
                 "Estado": "Definido",
-                "Estructura": "N/A",
+                "Estructura": "Compleja",
                 "Referencias": 0
             })
-            
-            # Procesar parámetros
-            for param in params:
-                simbolos.append({
-                    "Identificador": param,
-                    "Categoría": "Variable",
-                    "Tipo de Dato": "desconocido",
-                    "Ámbito": identificador,
-                    "Dirección": f"0x{abs(hash(f'{param}{identificador}')):X}",
-                    "Línea": current_line,
-                    "Valor": "N/A",
-                    "Estado": "Declarado",
-                    "Estructura": "Simple",
-                    "Referencias": 0
-                })
-            
-            # Procesar cuerpo de función
-            if len(node.children) > (2 if len(params) > 0 else 1):
-                cuerpo = node.children[2] if len(params) > 0 else node.children[1]
-                extraer_simbolos(cuerpo, identificador)
+
+            # Procesar cuerpo de la función
+            if len(node.children) > 2:
+                cuerpo = node.children[2]
+                if cuerpo.data == "block":
+                    extraer_simbolos(cuerpo, identificador)
 
         # Clases
         elif node.data == "class_declaration":
             if len(node.children) < 1:
                 continue
-                
+
             identificador = get_identifier(node.children[0])
+            current_line = get_line(node)
+
             simbolos.append({
                 "Identificador": identificador,
                 "Categoría": "Clase",
@@ -192,30 +204,56 @@ def extraer_simbolos(tree, ambito="Global"):
                 "Línea": current_line,
                 "Valor": "N/A",
                 "Estado": "Definido",
-                "Estructura": "N/A",
+                "Estructura": "Compleja",
                 "Referencias": 0
             })
-            
-            # Procesar atributos de clase
+
+            # Procesar cuerpo de la clase
             if len(node.children) > 1:
-                for child in node.children[1].find_data('variable_declaration'):
-                    if len(child.children) < 1:
-                        continue
-                        
-                    attr_id = get_identifier(child.children[0])
-                    simbolos.append({
-                        "Identificador": attr_id,
-                        "Categoría": "Variable",
-                        "Tipo de Dato": "desconocido",
-                        "Ámbito": identificador,
-                        "Dirección": f"0x{abs(hash(f'{attr_id}{identificador}')):X}",
-                        "Línea": get_line(child),
-                        "Valor": "N/A",
-                        "Estado": "Declarado",
-                        "Estructura": "Simple",
-                        "Referencias": 0
-                    })
-    
+                cuerpo = node.children[1]
+                if cuerpo.data == "class_body":
+                    for elem in cuerpo.children:
+                        if elem.data == "variable_declaration":
+                            attr_id = get_identifier(elem.children[0])
+                            attr_type = determinar_tipo(elem.children[1]) if len(elem.children) > 1 else 'desconocido'
+
+                            simbolos.append({
+                                "Identificador": attr_id,
+                                "Categoría": "Atributo",
+                                "Tipo de Dato": attr_type,
+                                "Ámbito": identificador,
+                                "Dirección": f"0x{abs(hash(f'{attr_id}{identificador}')):X}",
+                                "Línea": get_line(elem),
+                                "Valor": "N/A",
+                                "Estado": "Declarado",
+                                "Estructura": "Simple",
+                                "Referencias": 0
+                            })
+                        elif elem.data == "method_declaration":
+                            extraer_simbolos(elem, identificador)
+
+        # Asignaciones
+        elif node.data == "assignment_expression":
+            if len(node.children) < 2:
+                continue
+
+            identificador = get_identifier(node.children[0])
+            valor = get_identifier(node.children[1])
+            tipo = determinar_tipo(node.children[1])
+
+            simbolos.append({
+                "Identificador": identificador,
+                "Categoría": "Variable",
+                "Tipo de Dato": tipo,
+                "Ámbito": ambito,
+                "Dirección": f"0x{abs(hash(f'{identificador}{ambito}')):X}",
+                "Línea": current_line,
+                "Valor": valor,
+                "Estado": "Asignado",
+                "Estructura": "Simple",
+                "Referencias": 0
+            })
+
     return simbolos
 
 # Función para el análisis sintáctico con manejo de errores mejorado
