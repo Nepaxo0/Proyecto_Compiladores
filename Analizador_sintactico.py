@@ -100,31 +100,35 @@ def extraer_simbolos(tree, ambito="Global"):
                 return 'int' if '.' not in node.value else 'float'
             elif node.type == 'STRING_LITERAL':
                 return 'string'
-            elif node.type == 'BOOLEAN':
+            elif node.type in ('BOOLEAN', 'True', 'False'):
                 return 'bool'
+            elif node.type == 'IDENTIFIER':
+                return 'desconocido'  # Puede ser una variable o un tipo no definido aún
+        elif isinstance(node, Tree):
+            if node.data == 'array_literal':
+                return 'array'
+            elif node.data == 'struct_type':
+                return 'struct'
+            elif node.data == 'type':
+                return get_identifier(node.children[0])  # Extrae el tipo explícito
+            elif node.data == 'expression':
+                # Intenta determinar el tipo de la expresión
+                if len(node.children) == 1:
+                    return determinar_tipo(node.children[0])
         return 'desconocido'
 
     for node in tree.iter_subtrees():
-        print(f"Procesando nodo: {node.data}, Línea: {get_line(node)}")
         current_line = get_line(node)
+        print(f"Procesando nodo: {node.data}, Línea: {current_line}")
+        if node.data == "variable_declaration":
+            tipo = determinar_tipo(node.children[1]) if len(node.children) > 1 else "desconocido"
+            print(f"Tipo de dato detectado: {tipo}")
 
         # Variables globales
         if node.data == "variable_declaration":
-            if len(node.children) < 1:
-                continue
-
             identificador = get_identifier(node.children[0])
-            if identificador in variables_globales:
-                continue
-
-            variables_globales.add(identificador)
-            tipo = "desconocido"
-            valor = "N/A"
-
-            if len(node.children) > 1:
-                val_node = node.children[1]
-                tipo = determinar_tipo(val_node)
-                valor = get_identifier(val_node)
+            tipo = determinar_tipo(node.children[1]) if len(node.children) > 1 else "desconocido"
+            valor = get_identifier(node.children[1]) if len(node.children) > 1 else "N/A"
 
             simbolos.append({
                 "Identificador": identificador,
