@@ -20,21 +20,11 @@ array_type: "array" identifier "[" type "]"
 struct_type: "block" "||" variable_declaration_list "||"
 variable_declaration_list: (variable_declaration)*
 variable_declaration: "var" identifier ("=" expression)? 
-constant_declaration: "cte" identifier "=" expression  
+constant_declaration: "cte" identifier "=" expression 
 array_literal: "[" expression ("," expression)* "]"
 
-expression: identifier 
-          | integer 
-          | float 
-          | string_literal 
-          | booleano 
-          | arithmetic_expression 
-          | logical_expression 
-          | assignment_expression 
-          | relational_expression 
-          | instance_creation 
-          | array_literal 
-          | grouped_expression
+expression: identifier | integer | string_literal | booleano | arithmetic_expression | logical_expression | assignment_expression | relational_expression |instance_creation | array_literal | grouped_expression 
+
 
 arithmetic_expression: expression arithmetic_operator expression
 logical_expression: expression logical_operator expression 
@@ -54,15 +44,13 @@ while_loop: "while" "(" expression ")" "||" statement_block "||"
 for_loop: "for" "(" identifier "in" expression ")" "||" statement_block "||"
 
 statement_block: statement*
-statement: variable_declaration | expression | method_call | control_structure | print_statement | class_declaration | function_declaration | type | interface_declaration| return_statement
+statement: variable_declaration | expression | method_call | control_structure | print_statement | class_declaration | function_declaration | type | interface_declaration | constant_declaration
 argument_list: expression ("," expression)*
-return_statement: "return" expression
 string_literal: "\"" char* "\""    
 method_call: identifier "." identifier "(" argument_list? ")" 
 
 
-integer: /[0-9]+/                
-float: /[0-9]+\.[0-9]+/          
+integer: DIGIT+
 type: primitive_type | composite_type
 parameter_list: parameter ("," parameter)*
 parameter:  identifier
@@ -72,7 +60,7 @@ print_statement: "show" "(" argument_list? ")"
 function_declaration: DO "function" identifier "(" parameter_list? ")" "||" statement_block "||"
 
 class_declaration: "class" identifier ("inherits" identifier )?  "||" class_body "||"
-class_body: (variable_declaration | method_declaration | constructor_declaration)*
+class_body: (variable_declaration | method_declaration | constructor_declaration | constant_declaration)*
 constructor_declaration: DO identifier "(" parameter_list? ")" "||" statement_block "||"
 access_modifier: "public" | "private" | "protected"
 interface_declaration: "interface" "||" method_signature* "||"
