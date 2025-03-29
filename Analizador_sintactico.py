@@ -352,50 +352,56 @@ def mostrar_tabla_simbolos():
         ventana_tabla = Toplevel(ventana)
         ventana_tabla.title("Tabla de Símbolos")
         ventana_tabla.geometry("1200x600")
-        
+        ventana_tabla.configure(bg="white")  # Fondo blanco
+
         # Obtener el código actual
         codigo = entrada_texto.get("1.0", tk.END).strip()
         if not codigo:
-            tk.Label(ventana_tabla, text="No hay código para analizar", fg="red").pack()
+            tk.Label(ventana_tabla, text="No hay código para analizar", fg="red", bg="white", font=("Times New Roman", 12, "bold")).pack(pady=10)
             return
-        
+
         # Parsear y extraer símbolos
         arbol = parser.parse(codigo)
         simbolos = extraer_simbolos(arbol)
-        
+
         # Crear Treeview
         columnas = [
             "Identificador", "Categoría", "Tipo de Dato", "Ámbito",
             "Dirección", "Línea", "Valor", "Estado", "Estructura", "Referencias"
         ]
-        
-        tabla = ttk.Treeview(ventana_tabla, columns=columnas, show="headings")
-        
+
+        style = ttk.Style()
+        style.configure("Treeview", font=("Consolas", 10), background="white", foreground="black", rowheight=25, fieldbackground="white")
+        style.configure("Treeview.Heading", font=("Times New Roman", 12, "bold"), background="white", foreground="#1F2833")  # Azul oscuro
+        style.map("Treeview.Heading", background=[("active", "#E67E22")])
+
+        tabla = ttk.Treeview(ventana_tabla, columns=columnas, show="headings", style="Treeview")
+
         # Configurar columnas
         for col in columnas:
             tabla.heading(col, text=col)
             tabla.column(col, width=120, anchor="center")
-        
+
         # Insertar datos
         if not simbolos:
-            tk.Label(ventana_tabla, text="No se encontraron símbolos", fg="red").pack()
+            tk.Label(ventana_tabla, text="No se encontraron símbolos", fg="red", bg="white", font=("Times New Roman", 12, "bold")).pack(pady=10)
         else:
             for simbolo in simbolos:
                 valores = [simbolo.get(col, "") for col in columnas]
                 tabla.insert("", "end", values=valores)
-            
+
             # Configurar scrollbars
             scroll_y = ttk.Scrollbar(ventana_tabla, orient="vertical", command=tabla.yview)
             scroll_x = ttk.Scrollbar(ventana_tabla, orient="horizontal", command=tabla.xview)
             tabla.configure(yscrollcommand=scroll_y.set, xscrollcommand=scroll_x.set)
-            
+
             # Layout
-            tabla.grid(row=0, column=0, sticky="nsew")
+            tabla.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
             scroll_y.grid(row=0, column=1, sticky="ns")
-            scroll_x.grid(row=1, column=0, sticky="ew")
+            scroll_x.grid(row=1, column=0, sticky="ew", padx=10)
             ventana_tabla.grid_rowconfigure(0, weight=1)
             ventana_tabla.grid_columnconfigure(0, weight=1)
-    
+
     except UnexpectedInput as e:
         messagebox.showerror("Error de análisis", f"Error sintáctico: {e}")
     except Exception as e:
@@ -407,6 +413,12 @@ ventana = tk.Tk()
 ventana.title("Analizador Sintáctico - Polux")
 ventana.geometry("900x600")
 ventana.configure(bg="#447091")
+
+style = ttk.Style()
+style.configure("TButton", font=("Times New Roman", 12, "bold italic"), padding=8, relief="flat")
+style.map("TButton", background=[("active", "#E67E22"), ("!disabled", "#D35400")], foreground=[("active", "white"), ("!disabled", "#447091")])
+style.configure("TLabel", font=("Times New Roman", 12, "bold italic"), background="#447091", foreground="white")
+style.configure("TFrame", background="#447091")
 
 frame = ttk.Frame(ventana)
 frame.pack(padx=20, pady=20, fill="both", expand=True)
