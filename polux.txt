@@ -23,8 +23,18 @@ variable_declaration: "var" identifier ("=" expression)?
 constant_declaration: "cte" identifier "=" expression  
 array_literal: "[" expression ("," expression)* "]"
 
-expression: identifier | integer | string_literal | booleano | arithmetic_expression | logical_expression | assignment_expression | relational_expression |instance_creation | array_literal | grouped_expression
-
+expression: identifier 
+          | integer 
+          | float 
+          | string_literal 
+          | booleano 
+          | arithmetic_expression 
+          | logical_expression 
+          | assignment_expression 
+          | relational_expression 
+          | instance_creation 
+          | array_literal 
+          | grouped_expression
 
 arithmetic_expression: expression arithmetic_operator expression
 logical_expression: expression logical_operator expression 
@@ -44,13 +54,15 @@ while_loop: "while" "(" expression ")" "||" statement_block "||"
 for_loop: "for" "(" identifier "in" expression ")" "||" statement_block "||"
 
 statement_block: statement*
-statement: variable_declaration | expression | method_call | control_structure | print_statement | class_declaration | function_declaration | type | interface_declaration 
+statement: variable_declaration | expression | method_call | control_structure | print_statement | class_declaration | function_declaration | type | interface_declaration| return_statement
 argument_list: expression ("," expression)*
+return_statement: "return" expression
 string_literal: "\"" char* "\""    
 method_call: identifier "." identifier "(" argument_list? ")" 
 
 
-integer: DIGIT+
+integer: /[0-9]+/                
+float: /[0-9]+\.[0-9]+/          
 type: primitive_type | composite_type
 parameter_list: parameter ("," parameter)*
 parameter:  identifier

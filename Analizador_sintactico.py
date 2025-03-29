@@ -1,8 +1,10 @@
 from lark import Lark, UnexpectedInput
 import tkinter as tk
-from tkinter import ttk, scrolledtext, Toplevel
+from tkinter import ttk, scrolledtext, Toplevel,  messagebox
 from lark import Lark, UnexpectedInput, Tree, Token
 import pickle
+
+
 
 # Cargar la gramática desde el archivo
 try:
@@ -22,6 +24,8 @@ class TablaSimbolos:
         self.archivo_secundario = "simbolos_overflow.pkl"
 
     def agregar(self, simbolo):
+
+        # Si no existe, agregarlo como nuevo símbolo
         if len(self.simbolos) < self.capacidad:
             self.simbolos.append(simbolo)
         else:
@@ -43,8 +47,33 @@ class TablaSimbolos:
         self.simbolos.clear()
         open(self.archivo_secundario, "wb").close()  # Vaciar archivo
 
-# Instancia de la tabla de símbolos
-tabla_simbolos = TablaSimbolos()
+    def incrementar_referencia(self, identificador):
+        """Incrementa el contador de referencias de un símbolo por su identificador"""
+        for simbolo in self.simbolos:
+            if simbolo["Identificador"] == identificador:
+                simbolo["Referencias"] += 1
+                print(f"Referencia incrementada para: {identificador}, Total: {simbolo['Referencias']}")
+                return
+        # Si no está en memoria principal, buscar en el archivo secundario
+        try:
+            with open(self.archivo_secundario, "rb") as f:
+                simbolos_secundarios = []
+                encontrado = False
+                while True:
+                    simbolo = pickle.load(f)
+                    if simbolo["Identificador"] == identificador:
+                        simbolo["Referencias"] += 1
+                        encontrado = True
+                    simbolos_secundarios.append(simbolo)
+        except (EOFError, FileNotFoundError):
+            pass  # Fin del archivo o archivo no encontrado
+
+        # Reescribir el archivo secundario con los cambios
+        if encontrado:
+            with open(self.archivo_secundario, "wb") as f:
+                for simbolo in simbolos_secundarios:
+                    pickle.dump(simbolo, f)
+            print(f"Referencia incrementada para: {identificador} en archivo secundario")
 
 # Algoritmo de Shunting Yard para evaluar expresiones matemáticas
 def shunting_yard(expresion):
@@ -78,6 +107,8 @@ def shunting_yard(expresion):
 
 # Función para extraer identificadores y agregarlos a la tabla de símbolos
 def extraer_simbolos(tree, ambito="Global"):
+    # Inicializar la tabla de símbolos global
+    tabla_simbolos = TablaSimbolos()
     simbolos = []
     variables_globales = set()
 
@@ -96,16 +127,28 @@ def extraer_simbolos(tree, ambito="Global"):
     def determinar_tipo(node):
         """Determina el tipo de dato basado en el nodo"""
         if isinstance(node, Token):
-            if node.type in ('NUMBER', 'INTEGER'):
-                return 'int' if '.' not in node.value else 'float'
+            # Manejo de tokens
+            if node.type in ('integer', 'DIGIT'):
+                return 'int'
+            elif node.type == 'float':
+                return 'float'
             elif node.type == 'STRING_LITERAL':
                 return 'string'
-            elif node.type in ('BOOLEAN', 'True', 'False'):
+            elif node.type in ('booleano', 'True', 'False'):
                 return 'bool'
             elif node.type == 'IDENTIFIER':
                 return 'desconocido'  # Puede ser una variable o un tipo no definido aún
         elif isinstance(node, Tree):
-            if node.data == 'array_literal':
+            # Manejo de subárboles
+            if node.data == 'integer':
+                return 'int'
+            elif node.data == 'float':
+                return 'float'
+            elif node.data == 'booleano':
+                return 'bool'
+            elif node.data == 'string_literal':
+                return 'string'
+            elif node.data == 'array_literal':
                 return 'array'
             elif node.data == 'struct_type':
                 return 'struct'
@@ -129,7 +172,8 @@ def extraer_simbolos(tree, ambito="Global"):
             identificador = get_identifier(node.children[0])
             tipo = determinar_tipo(node.children[1]) if len(node.children) > 1 else "desconocido"
             valor = get_identifier(node.children[1]) if len(node.children) > 1 else "N/A"
-
+            # Incrementar referencia al acceder al símbolo
+            tabla_simbolos.incrementar_referencia(identificador)
             simbolos.append({
                 "Identificador": identificador,
                 "Categoría": "Variable",
@@ -143,6 +187,42 @@ def extraer_simbolos(tree, ambito="Global"):
                 "Referencias": 0
             })
 
+        elif node.data == "constant_declaration":
+            print(f"Determinando tipo para constante: {node}")
+            identificador = get_identifier(node.children[0])
+            tipo = determinar_tipo(node.children[1]) if len(node.children) > 1 else "desconocido"
+            valor = get_identifier(node.children[1]) if len(node.children) > 1 else "N/A"
+            simbolos.append({
+                "Identificador": identificador,
+                "Categoría": "Constante",
+                "Tipo de Dato": tipo,
+                "Ámbito": ambito,
+                "Dirección": f"0x{abs(hash(f'{identificador}{ambito}')):X}",
+                "Línea": current_line,
+                "Valor": valor,
+                "Estado": "Inicializado" if valor != "N/A" else "Declarado",
+                "Estructura": "Simple",
+                "Referencias": 0
+            })
+
+        elif node.data == "array_literal":
+            identificador = get_identifier(node.children[0])
+            tipo = determinar_tipo(node.children[1]) if len(node.children) > 1 else "desconocido"
+            valor = get_identifier(node.children[1]) if len(node.children) > 1 else "N/A"
+            tabla_simbolos.incrementar_referencia(identificador)
+            simbolos.append({
+                "Identificador": identificador,
+                "Categoría": "Arreglo",
+                "Tipo de Dato": "array",
+                "Ámbito": ambito,
+                "Línea": current_line,
+                "Estado": "Inicializado" if valor != "N/A" else "Declarado",
+                "Estructura": "Simple",
+                "Referencias": 0
+            })
+
+        
+
         # Funciones
         elif node.data == "function_declaration":
             if len(node.children) < 2:
@@ -150,6 +230,7 @@ def extraer_simbolos(tree, ambito="Global"):
 
             identificador = get_identifier(node.children[0])
             params = []
+
             current_line = get_line(node)
 
             # Procesar parámetros
@@ -158,7 +239,7 @@ def extraer_simbolos(tree, ambito="Global"):
                     param_id = get_identifier(param.children[0])
                     param_type = determinar_tipo(param.children[1]) if len(param.children) > 1 else 'desconocido'
                     params.append(f"{param_id}: {param_type}")
-
+                    tabla_simbolos.incrementar_referencia(identificador)
                     simbolos.append({
                         "Identificador": param_id,
                         "Categoría": "Parámetro",
@@ -197,6 +278,7 @@ def extraer_simbolos(tree, ambito="Global"):
                 continue
 
             identificador = get_identifier(node.children[0])
+            tabla_simbolos.incrementar_referencia(identificador)
             current_line = get_line(node)
 
             simbolos.append({
@@ -244,7 +326,7 @@ def extraer_simbolos(tree, ambito="Global"):
             identificador = get_identifier(node.children[0])
             valor = get_identifier(node.children[1])
             tipo = determinar_tipo(node.children[1])
-
+            tabla_simbolos.incrementar_referencia(identificador)
             simbolos.append({
                 "Identificador": identificador,
                 "Categoría": "Variable",
