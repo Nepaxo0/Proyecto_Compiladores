@@ -334,76 +334,137 @@ class SemanticAnalyzer(Visitor):
         super().visit(tree) # Llama a los métodos visit_* correspondientes
         return self.errors
 
+    # Dentro de la clase SemanticAnalyzer, método variable_declaration
+    # Dentro de la clase SemanticAnalyzer
     def variable_declaration(self, node):
-        """Procesa la declaración de variables."""
-        if not isinstance(Tree, Tree):
-            # Esto no debería pasar si el visitante se llama correctamente,
-            # pero es una salvaguarda.
-            print(f"Error Interno: Se esperaba un objeto Tree en declaracion_variable, se recibió {type(Tree)}")
-            # Puedes decidir si añadir un error semántico o lanzar una excepción
-            # self.errores.append("Error interno del analizador.")
+        """Procesa la declaración de variables, reconstruyendo el nombre desde LETTER/DIGIT."""
+        print("\nDEBUG: Entrando a variable_declaration")
+
+        # --- Imprimir info básica del nodo ---
+        if isinstance(node, Tree):
+            print(f"DEBUG: Nodo recibido: Tree(data='{node.data}') con {len(node.children)} hijos.")
+        else:
+            print(f"DEBUG: Nodo recibido NO es Tree: {node}")
+            self.add_error("Error interno: Se esperaba un nodo Tree para variable_declaration.", node)
             return
-        identifier_token = None
-        valor_nodo = None # Nodo/Token que representa el valor asignado
 
-        # Buscar el token IDENTIFIER y el nodo de la expresión/valor
-        # Asumimos que el IDENTIFIER es el segundo hijo (índice 1)
-        # y el valor/expresión es el cuarto hijo (índice 3) en la estructura esperada.
-        # ¡¡IMPORTANTE!!: Ajusta los índices si tu gramática genera una estructura diferente.
-        # Puedes imprimir tree.pretty() o tree.children para verificar la estructura exacta.
+        identifier_token_for_meta = None # Guarda el PRIMER token (LETTER) para línea/col
+        variable_name = None             # Guarda el nombre completo reconstruido
+        identifier_node_index = -1       # Índice del nodo 'identifier' o del token directo
 
-        if len(Tree.children) >= 2 and isinstance(Tree.children[1], Token) and Tree.children[1].type == 'IDENTIFIER':
-            identifier_token = Tree.children[1]
-        
-        if len(Tree.children) >= 4: # Asume VAR IDENTIFIER ASSIGN expr
-             valor_nodo = Tree.children[3] # El nodo de la expresión
+        # --- Búsqueda y Reconstrucción del Identificador ---
+        for i, child in enumerate(node.children):
+            print(f"  DEBUG: Chequeando hijo {i}: Tipo={type(child)}")
 
-        # Comprobar si encontramos el identificador
-        if identifier_token is None:
-            # No se encontró el IDENTIFIER donde se esperaba.
-            # Intentar una búsqueda más genérica (puede ser menos eficiente)
-            for child in Tree.children:
-                if isinstance(child, Token) and child.type == 'IDENTIFIER':
-                    identifier_token = child
-                    break # Encontramos el primero, salimos
-            # Si aún no se encuentra, reportar el error original
-            if identifier_token is None:
-                line = Tree.meta.line if hasattr(Tree, 'meta') else '?'
-                column = Tree.meta.column if hasattr(Tree, 'meta') else '?' # La columna puede ser menos precisa aquí
-                self.errores.append(f"Error Semántico (Línea {line}, Col {column}): Error interno: No se pudo encontrar el token IDENTIFIER en la declaración de variable. Estructura recibida: {Tree.pretty() if hasattr(Tree, 'pretty') else Tree}")
-                return # No podemos continuar sin el nombre
+            # CASO PRINCIPAL: El identificador está dentro de un Tree(data='identifier')
+            if isinstance(child, Tree) and child.data == 'identifier':
+                print(f"    DEBUG: Es Tree(data='identifier'). Reconstruyendo nombre...")
+                identifier_node_index = i
+                reconstructed_name = ""
+                first_token_found = None # Para guardar el primer token de este identificador
 
-        # --- Fin de la Corrección ---
+                # Iterar sobre los tokens DENTRO del Tree 'identifier' (LETTER, DIGIT, etc.)
+                for sub_child in child.children:
+                    if isinstance(sub_child, Token):
+                        # Guarda el primer token encontrado (debería ser LETTER)
+                        if first_token_found is None:
+                            first_token_found = sub_child
+                            print(f"      DEBUG: Primer token encontrado para meta: Type='{sub_child.type}', Value='{sub_child.value}'")
 
-        # Ahora sí podemos extraer la información del token encontrado
-        variable_name = identifier_token.value
-        line = identifier_token.line
-        column = identifier_token.column
+                        # Concatena el valor del token al nombre
+                        reconstructed_name += sub_child.value
+                        print(f"      DEBUG: Concatenando: '{sub_child.value}'. Nombre actual: '{reconstructed_name}'")
+                    else:
+                        # No debería haber otros Trees aquí según la gramática de 'identifier'
+                        print(f"      WARN: Se encontró algo inesperado dentro de Tree 'identifier': {type(sub_child)}")
 
-        # ----- Lógica Semántica Original (Adaptada) -----
+                # Si encontramos tokens dentro y pudimos reconstruir
+                if first_token_found:
+                    identifier_token_for_meta = first_token_found
+                    variable_name = reconstructed_name
+                    print(f"    DEBUG: Nombre reconstruido final: '{variable_name}', Token para metadata: {identifier_token_for_meta}")
+                    break # Salir del bucle principal (child) porque ya encontramos el identificador
+                else:
+                    print(f"    WARN: No se encontraron tokens dentro del Tree 'identifier'.")
+                    # No hacemos break, podría haber otra forma de declararlo (poco probable)
 
-        # 1. Comprobar si la variable ya existe en el ámbito actual
-        if variable_name in self.tabla_simbolos:
-            self.errores.append(f"Error Semántico (Línea {line}, Col {column}): La variable '{variable_name}' ya ha sido declarada.")
-            return # No agregarla de nuevo
+            # CASO ALTERNATIVO: Si tuvieras un token IDENTIFIER directo (poco probable con tu gramática actual)
+            elif isinstance(child, Token) and child.type == 'IDENTIFIER':
+                 print(f"    DEBUG: Coincidencia directa encontrada (Token IDENTIFIER): '{child.value}'")
+                 identifier_token_for_meta = child
+                 variable_name = child.value
+                 identifier_node_index = i
+                 break
 
-        # 2. Determinar el tipo de la variable (basado en el valor asignado)
-        variable_type = self.determinar_tipo(valor_nodo) # Necesitas una función para esto
+            # --- Verificación post-búsqueda ---
+        if variable_name is None or identifier_token_for_meta is None:
+            print(f"DEBUG: *** variable_name o identifier_token_for_meta es None DESPUÉS de la búsqueda. Error será añadido. ***")
+            # Intenta obtener la línea del nodo padre para el mensaje de error
+            error_line = node.meta.line if hasattr(node, 'meta') and hasattr(node.meta, 'line') else 'N/A'
+            self.add_error(f"Error interno (Línea ~{error_line}): No se pudo reconstruir el nombre del identificador o encontrar su token inicial.", node)
+            return
+        else:
+            # Imprime info del token meta, pero no accederemos a su .meta para la línea
+            print(f"DEBUG: Identificador procesado: Nombre='{variable_name}', Token Meta='{identifier_token_for_meta}' (Type='{identifier_token_for_meta.type}')")
 
-        if variable_type == "ERROR_TIPO_DESCONOCIDO":
-             # Asume que determinar_tipo puede devolver un error si no reconoce el tipo
-             self.errores.append(f"Error Semántico (Línea {line}, Col {column}): No se pudo determinar el tipo del valor asignado a '{variable_name}'.")
-             return
+        # --- Obtener metadatos y procesar el resto ---
+        # ******** CORRECCIÓN AQUÍ ********
+        # Obtener la línea del NODO PADRE ('variable_declaration' -> variable 'node')
+        line = 'N/A' # Valor por defecto
+        if hasattr(node, 'meta') and hasattr(node.meta, 'line'):
+            line = node.meta.line
+            print(f"DEBUG: Línea obtenida del nodo 'variable_declaration': {line}")
+        else:
+            print(f"WARN: No se pudo obtener la línea desde node.meta para la declaración de '{variable_name}'. Se usará 'N/A'.")
+            # Como fallback MUY improbable, podrías intentar acceder a .line directamente en el token,
+            # pero si .meta no existe, es poco probable que .line sí.
+            # if hasattr(identifier_token_for_meta, 'line'):
+            #     line = identifier_token_for_meta.line
+            #     print(f"DEBUG: Línea obtenida directamente del token meta (fallback): {line}")
 
-        # 3. Añadir la variable a la tabla de símbolos
-        print(f"Variable declarada: {variable_name} (Tipo: {variable_type})") # Mensaje de depuración/éxito
-        self.tabla_simbolos[variable_name] = {'type': variable_type, 'line': line, 'column': column}
 
-        # Aquí deberías llamar a self.visit() para los hijos si es necesario procesar la expresión
-        # Por ejemplo, para verificar tipos dentro de la expresión si es compleja.
-        if valor_nodo:
-            self.visit(valor_nodo)
+        # Lógica para encontrar el nodo de expresión y determinar tipo/inicialización
+        variable_type = 'desconocido'
+        is_initialized = False
+        value = None
+        expression_node = None
 
+        # Buscar el nodo de expresión (usando el índice guardado)
+        if identifier_node_index != -1 and identifier_node_index + 1 < len(node.children):
+            possible_expr_node = node.children[identifier_node_index + 1]
+            # Comprobar si el siguiente nodo es el de la expresión
+            if isinstance(possible_expr_node, Tree) and possible_expr_node.data == 'expression':
+                expression_node = possible_expr_node
+                print(f"DEBUG: Nodo de expresión encontrado: {expression_node.data}")
+            else:
+                 print(f"DEBUG: El nodo siguiente al identificador (índice {identifier_node_index + 1}) no es Tree 'expression'.")
+        else:
+            print(f"DEBUG: No hay nodo siguiente al identificador o índice inválido ({identifier_node_index}).")
+
+
+        if expression_node:
+            self.visit(expression_node) # Analizar la expresión
+            variable_type = self._get_expression_type(expression_node)
+            value = self._get_node_text(expression_node) # Obtener texto (puede ser simple)
+            is_initialized = True
+            print(f"DEBUG: Expresión analizada. Tipo determinado: {variable_type}, Valor Texto: {value}")
+        else:
+            print(f"DEBUG: No se encontró nodo de expresión para inicialización.")
+            # Aquí podrías requerir un tipo explícito si tu lenguaje lo necesita
+            # variable_type = 'tipo_requerido_si_no_inicializa'
+            is_initialized = False
+
+        # Añadir símbolo a la tabla usando el nombre reconstruido y la línea del primer token
+        symbol_entry = SymbolEntry(name=variable_name, kind='variable', sym_type=variable_type,
+                                   scope=self.symbol_table.current_scope, line=line,
+                                   initialized=is_initialized, value=value) # Añade otros campos necesarios
+
+        success, error_msg = self.symbol_table.add_symbol(symbol_entry)
+        if success:
+            print(f"DEBUG: Símbolo '{variable_name}' añadido correctamente al scope '{self.symbol_table.current_scope.name}'")
+        else:
+            print(f"DEBUG: Falló al añadir símbolo '{variable_name}'. Mensaje: {error_msg}")
+            self.add_error(error_msg, identifier_token_for_meta) # Reportar error en la línea del identificador
 
     def constant_declaration(self, node):
         """Procesa la declaración de constantes."""
@@ -840,18 +901,26 @@ def analizar():
         return
 
     try:
-        # 1. Análisis Sintáctico
         salida_texto.insert(tk.END, "--- Análisis Sintáctico ---\n", "info")
         arbol = parser.parse(codigo)
         salida_texto.insert(tk.END, "✓ Análisis sintáctico completado con éxito\n", "success")
-        # Descomentar si aún quieres mostrar el árbol
-        # salida_texto.insert(tk.END, "Árbol sintáctico generado:\n", "info")
-        # salida_texto.insert(tk.END, arbol.pretty(), "info")
-        # salida_texto.insert(tk.END, "\n\n")
 
-        # 2. Análisis Semántico
+        # --- DEBUG: Print AST node names ---
+        print("\n--- AST Structure (Relevant Nodes) ---")
+        def print_node_names(node, indent=""):
+            if isinstance(node, Tree):
+                print(f"{indent}Node: {node.data}")
+                for child in node.children:
+                    print_node_names(child, indent + "  ")
+            # Optional: print tokens too
+            # elif isinstance(node, Token):
+            #    print(f"{indent}Token: {node.type} ({node.value})")
+        print_node_names(arbol)
+        print("------------------------------------\n")
+        # --- END DEBUG ---
+
         salida_texto.insert(tk.END, "--- Análisis Semántico ---\n", "info")
-        semantic_errors = semantic_analyzer.visit(arbol) # El analizador usa su propia tabla
+        semantic_errors = semantic_analyzer.visit(arbol) 
 
         if not semantic_errors:
             salida_texto.insert(tk.END, "✓ Análisis semántico completado con éxito\n", "success")
