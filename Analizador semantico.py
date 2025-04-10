@@ -353,95 +353,121 @@ class SemanticAnalyzer(Visitor):
 
 
     # Dentro de la clase SemanticAnalyzer, método variable_declaration
-    # Dentro de la clase SemanticAnalyzer
+
     def variable_declaration(self, node):
-        """Procesa la declaración de variables, reconstruyendo nombre y SIN duplicación/reset."""
-        print("\nDEBUG: Entrando a variable_declaration")
+        """Procesa la declaración de variables, incluyendo chequeo de tipo explícito."""
+        print("\nDEBUG: Entrando a variable_declaration (MODIFICADO)")
         if not isinstance(node, Tree):
             print(f"DEBUG: Nodo recibido NO es Tree: {node}")
             self.add_error("Error interno: Se esperaba un nodo Tree para variable_declaration.", node)
             return
-        print(f"DEBUG: Nodo recibido: Tree(data='{node.data}') con {len(node.children)} hijos.")
+        print(f"DEBUG: Nodo recibido: Tree(data='{node.data}') con {len(node.children)} hijos: {node.children}") # Muestra los hijos
 
-        identifier_token_for_meta = None
-        variable_name = None
-        identifier_node_index = -1
-
-        # --- Búsqueda y Reconstrucción del Identificador ---
-        for i, child in enumerate(node.children):
-            print(f"  DEBUG: Chequeando hijo {i}: Tipo={type(child)}")
-            if isinstance(child, Tree) and child.data == 'identifier':
-                print(f"    DEBUG: Es Tree(data='identifier'). Reconstruyendo nombre...")
-                identifier_node_index = i
-                reconstructed_name = ""
-                first_token_found = None
-                for sub_child in child.children:
-                    if isinstance(sub_child, Token):
-                        if first_token_found is None: first_token_found = sub_child
-                        reconstructed_name += sub_child.value
-                if first_token_found:
-                    identifier_token_for_meta = first_token_found
-                    variable_name = reconstructed_name
-                    print(f"    DEBUG: Nombre reconstruido final: '{variable_name}'")
-                    break
-                else:
-                    print(f"    WARN: No se encontraron tokens dentro del Tree 'identifier'.")
-            elif isinstance(child, Token) and child.type == 'IDENTIFIER': # Fallback si existiera
-                 identifier_token_for_meta = child
-                 variable_name = child.value
-                 identifier_node_index = i
-                 print(f"    DEBUG: Identificador encontrado como Token directo: '{variable_name}'")
-                 break
-
-        # --- Verificación post-búsqueda ---
-        if variable_name is None: # Solo necesitamos el nombre aquí
-            error_line = node.meta.line if hasattr(node, 'meta') and hasattr(node.meta, 'line') else 'N/A'
-            self.add_error(f"Error interno (Línea ~{error_line}): No se pudo reconstruir el nombre del identificador.", node)
-            return
-        print(f"DEBUG: Identificador procesado: Nombre='{variable_name}'")
-
-        # --- Obtener Línea ---
-        line = 'N/A'
-        if hasattr(node, 'meta') and hasattr(node.meta, 'line'):
-            line = node.meta.line
-            print(f"DEBUG: Línea obtenida del nodo 'variable_declaration': {line}")
-        else:
-            print(f"WARN: No se pudo obtener línea desde node.meta para '{variable_name}'.")
-
-        # --- Lógica para expresión y tipo/inicialización ---
-        variable_type = 'desconocido'
-        is_initialized = False
-        value = None
+        # --- Asumimos la estructura del AST basada en: type identifier ("=" expression)? ---
+        # Ajusta los índices según tu AST real después de cambiar la gramática
+        type_node = node.children[0]        # Nodo que contiene el tipo (e.g., un Tree('type') o Token('int'))
+        identifier_node = node.children[1] # Nodo del identificador
         expression_node = None
-        if identifier_node_index != -1 and identifier_node_index + 1 < len(node.children):
-            possible_expr_node = node.children[identifier_node_index + 1]
-            if isinstance(possible_expr_node, Tree) and possible_expr_node.data == 'expression':
-                expression_node = possible_expr_node
-                print(f"DEBUG: Nodo de expresión encontrado: {expression_node.data}")
-                # Determinar tipo y valor SIN llamar a self.visit()
-                variable_type = self._get_expression_type(expression_node)
-                value = self._get_node_text(expression_node)
-                is_initialized = True
-                print(f"DEBUG: Expresión encontrada. Tipo determinado: {variable_type}, Valor Texto: {value}")
+        assignment_operator_node = None
+        if len(node.children) > 3 and isinstance(node.children[2], Token) and node.children[2].value == '=':
+            assignment_operator_node = node.children[2]
+            expression_node = node.children[3] # Nodo de la expresión de inicialización
+        elif len(node.children) > 2 and isinstance(node.children[2], Tree): # Si la asignación es parte de la expr
+             # Podría ser más complejo, depende de cómo agrupe el parser
+             # Quizás necesites buscar el '=' y la 'expression' de forma más robusta
+             if node.children[2].data == 'expression': # Ejemplo simple
+                  expression_node = node.children[2]
 
-        if not expression_node:
-             print(f"DEBUG: No se encontró nodo de expresión para inicialización.")
-             is_initialized = False
 
-        # --- Añadir símbolo a la tabla (UNA SOLA VEZ) ---
-        print(f"DEBUG: Creando SymbolEntry: Nombre='{variable_name}', Tipo='{variable_type}', Línea='{line}', Scope='{self.symbol_table.current_scope.name}'")
-        symbol_entry = SymbolEntry(name=variable_name, kind='variable', sym_type=variable_type,
+        # --- 1. Extraer Nombre del Identificador ---
+        variable_name = None
+        identifier_token_for_meta = None
+        # Intenta obtener el token del identificador (puede estar anidado)
+        declared_type = 'desconocido' # Valor por defecto
+        if isinstance(type_node, Tree) and type_node.data == 'type':
+            if type_node.children:
+                child_of_type = type_node.children[0]
+                if isinstance(child_of_type, Tree) and child_of_type.data == 'primitive_type':
+                    # Ahora busca el token dentro de primitive_type
+                    if child_of_type.children and isinstance(child_of_type.children[0], Token):
+                        # Asumiendo que el primer hijo de primitive_type es el Token del tipo (int, float, etc.)
+                        declared_type = child_of_type.children[0].value.lower()
+                        print(f"  DEBUG (get_declared_type): Extraído de primitive_type: '{declared_type}'")
+                    else:
+                        print(f"  WARN (get_declared_type): primitive_type node no tiene un Token como primer hijo.")
+                elif isinstance(child_of_type, Tree) and child_of_type.data == 'composite_type':
+                    # Añade lógica similar si necesitas manejar tipos compuestos (string, array, etc.)
+                    # Ejemplo para string si estuviera definido así:
+                    # if child_of_type.children and isinstance(child_of_type.children[0], Token) and child_of_type.children[0].value == 'string':
+                    #    declared_type = 'string'
+                    print(f"  WARN (get_declared_type): Manejo de composite_type no implementado completamente.")
+                    pass # Implementar si es necesario
+                else:
+                    print(f"  WARN (get_declared_type): Hijo inesperado dentro del nodo 'type': {child_of_type.data if isinstance(child_of_type, Tree) else child_of_type}")
+            else:
+                print(f"  WARN (get_declared_type): El nodo 'type' no tiene hijos.")
+        else:
+            print(f"  WARN (get_declared_type): Se esperaba un nodo Tree(data='type') como primer hijo de variable_declaration, se obtuvo {type_node}")
+
+        print(f"DEBUG: Tipo declarado final extraído: '{declared_type}'") # Verifica el resultado final
+
+        # --- 2. Extraer Tipo Declarado Explícitamente ---
+        # Necesitas una función para obtener el texto del tipo desde el nodo 'type_node'
+        # Puede ser simple como _get_node_text o más específica si 'type_node' es complejo
+        declared_type = self._get_node_text(type_node).lower() # ej: "int", "string", "bool"
+        if declared_type == '<type>': # Fallback si _get_node_text no fue específico
+            # Intenta obtenerlo del primer hijo si es un token
+            if isinstance(type_node, Tree) and type_node.children and isinstance(type_node.children[0], Token):
+                 declared_type = type_node.children[0].value.lower()
+            else:
+                 declared_type = 'desconocido' # No se pudo determinar
+
+        print(f"DEBUG: Tipo declarado extraído: '{declared_type}'")
+
+        # --- 3. Procesar Inicialización y Verificar Tipos ---
+        is_initialized = False
+        initial_value_text = None
+        expression_type = None
+
+        if expression_node:
+        # ... (obtener expression_type y initial_value_text como antes) ...
+            print(f"DEBUG: Comparando: Declarado='{declared_type}', Expresión='{expression_type}'") # Añade esta línea
+            if expression_type not in ['error_type', 'desconocido'] and declared_type != 'desconocido' and expression_type != declared_type:
+                # Aquí puedes añadir lógica de compatibilidad (ej. asignar int a float)
+                is_compatible = False
+                # Ejemplo: permitir asignar int a float
+                # if declared_type == 'float' and expression_type == 'int':
+                #    is_compatible = True
+
+                if not is_compatible:
+                    # Error: El tipo de la expresión no coincide con el tipo declarado
+                    self.add_error(f"Tipo incompatible en inicialización. No se puede asignar tipo '{expression_type}' a la variable '{variable_name}' declarada como '{declared_type}'.",
+                                   assignment_operator_node if assignment_operator_node else expression_node) # Nodo para la línea del error
+
+        else:
+            print(f"DEBUG: No se encontró inicialización.")
+
+        # --- 4. Añadir Símbolo a la Tabla ---
+        line = 'N/A'
+        if identifier_token_for_meta and hasattr(identifier_token_for_meta, 'line'):
+             line = identifier_token_for_meta.line
+        elif hasattr(node, 'meta') and hasattr(node.meta, 'line'): # Fallback a nodo padre
+             line = node.meta.line
+
+        print(f"DEBUG: Creando SymbolEntry: Nombre='{variable_name}', Tipo='{declared_type}', Línea='{line}', Scope='{self.symbol_table.current_scope.name}', Init={is_initialized}")
+        symbol_entry = SymbolEntry(name=variable_name, kind='variable', sym_type=declared_type, # Usa el tipo DECLARADO
                                    scope=self.symbol_table.current_scope, line=line,
-                                   initialized=is_initialized, value=value)
+                                   initialized=is_initialized, value=initial_value_text) # Guarda el valor literal/texto
 
         success, error_msg = self.symbol_table.add_symbol(symbol_entry)
-        if success:
-             print(f"DEBUG: Símbolo '{variable_name}' añadido correctamente.")
-        else:
-             print(f"DEBUG: Falló al añadir símbolo '{variable_name}'. Mensaje: {error_msg}")
-             # Usar el nodo de declaración para reportar el error si falla la adición
-             self.add_error(error_msg, node)
+        if not success:
+            print(f"DEBUG: Falló al añadir símbolo '{variable_name}'. Mensaje: {error_msg}")
+            # Usa el token/nodo del identificador para reportar el error de redeclaración
+            self.add_error(error_msg, identifier_token_for_meta if identifier_token_for_meta else node)
 
+        # No llamar a self.visit(child) explícitamente aquí si ya procesaste todo.
+        # El visitador de Lark se encargará de visitar los hijos si no lo haces tú.
+        # Si procesaste la expresión aquí, podrías querer evitar que se visite de nuevo.
 
     def constant_declaration(self, node):
         """Procesa la declaración de constantes."""
