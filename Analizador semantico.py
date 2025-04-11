@@ -3,11 +3,13 @@ from tkinter import ttk, scrolledtext, Toplevel,  messagebox
 from lark import Lark, UnexpectedInput, Tree, Token, Visitor
 import pickle
 
+
 try:
     with open("polux.txt", "r") as file:
         grammar = file.read()
-    parser = Lark(grammar, parser="lalr", propagate_positions=True)
-    print("Gramática cargada correctamente.")
+    # Añade keep_all_tokens=True
+    parser = Lark(grammar, parser="lalr", propagate_positions=True, keep_all_tokens=True)
+    print("Gramática cargada correctamente (con keep_all_tokens).") # Mensaje modificado
 except Exception as e:
     print(f"Error al cargar la gramática: {e}")
     exit(1)
@@ -205,55 +207,56 @@ class SemanticAnalyzer(Visitor):
     def _get_expression_type(self, node):
         """Intenta determinar el tipo de una expresión. Muy simplificado."""
         if isinstance(node, Token):
+            # ... (tus casos existentes para Tokens: INTEGER, STRING_LITERAL, TRUE/FALSE, IDENTIFIER) ...
+            # Asegúrate de que estos casos funcionan bien. Ej:
             if node.type == 'INTEGER' or node.type == 'DIGIT': return 'int'
-            # if node.type == 'FLOAT': return 'float' # Asumiendo que tienes FLOAT
-            if node.type == 'STRING_LITERAL': return 'string'
+            if node.type == 'STRING_LITERAL': return 'string' # Debería funcionar para el token directo
             if node.type == 'TRUE' or node.type == 'FALSE' or node.type == 'BOOLEANO': return 'bool'
             if node.type == 'IDENTIFIER':
                 symbol = self.symbol_table.lookup(node.value)
                 if symbol:
-                    # Verificar inicialización antes de usar (excepto en LHS de asignación)
-                    # Esta verificación debería hacerse en el contexto del uso
-                    # if not symbol.initialized and not self._is_lhs_of_assignment(node):
-                    #     self.add_error(f"Variable '{node.value}' usada antes de ser inicializada.", node)
-                    return symbol.sym_type # Devolver el tipo del símbolo
+                    return symbol.sym_type
                 else:
                     self.add_error(f"Identificador '{node.value}' no declarado.", node)
-                    return 'error_type' # Tipo especial para indicar error
+                    return 'error_type'
+            # Añade más tipos de tokens si es necesario
+
         elif isinstance(node, Tree):
-            # Lógica recursiva para determinar tipo de expresiones compuestas
-            if node.data == 'arithmetic_expression':
-                left_type = self._get_expression_type(node.children[0])
-                right_type = self._get_expression_type(node.children[2])
-                op = node.children[1].value if isinstance(node.children[1], Token) else 'op'
+            # --- CORREGIR RECURSIÓN PARA NODO 'expression' ---
+            if node.data == 'expression':
+                # Asume que 'expression' simplemente envuelve a la expresión real
+                if len(node.children) == 1:
+                    # Llama recursivamente con la misma función _get_expression_type
+                    return self._get_expression_type(node.children[0])
+                else:
+                    # Si 'expression' puede tener operadores, etc., necesitas lógica aquí
+                    # Por ahora, si no es un simple envoltorio, marca como desconocido/error
+                    print(f"WARN (_get_expression_type): Nodo 'expression' tiene {len(node.children)} hijos, se esperaba 1.")
+                    return 'desconocido' # O 'error_type' si es un error seguro
 
-                # Comprobación de tipos simple para aritmética
-                if left_type == 'int' and right_type == 'int': return 'int'
-                # Añadir más reglas (float, etc.)
-                elif left_type != 'error_type' and right_type != 'error_type':
-                    self.add_error(f"Operación aritmética '{op}' inválida entre tipos '{left_type}' y '{right_type}'.", node)
-                return 'error_type'
+            # --- AÑADIR CASO PARA 'array_literal' ---
+            elif node.data == 'array_literal':
+                if node.children:
+                    # Intentar determinar el tipo basado en el primer elemento
+                    first_expr_node = None
+                    for child in node.children:
+                        # Saltar comas si son tokens (ajusta si son nodos)
+                        if isinstance(child, Tree) and child.data == 'expression':
+                            first_expr_node = child
+                            break # Encontró la primera expresión
 
-            elif node.data == 'logical_expression':
-                 left_type = self._get_expression_type(node.children[0])
-                 right_type = self._get_expression_type(node.children[2])
-                 op = node.children[1].value if isinstance(node.children[1], Token) else 'op'
-                 # Lógica similar para bool
-                 if left_type == 'bool' and right_type == 'bool': return 'bool'
-                 elif left_type != 'error_type' and right_type != 'error_type':
-                     self.add_error(f"Operación lógica '{op}' inválida entre tipos '{left_type}' y '{right_type}'.", node)
-                 return 'error_type'
-
-            elif node.data == 'relational_expression':
-                left_type = self._get_expression_type(node.children[0])
-                right_type = self._get_expression_type(node.children[2])
-                op = node.children[1].value if isinstance(node.children[1], Token) else 'op'
-                # Permitir comparaciones entre tipos compatibles (ej. int con int)
-                if left_type == right_type and left_type != 'error_type': return 'bool'
-                # Añadir reglas para compatibilidad (int/float) si es necesario
-                elif left_type != 'error_type' and right_type != 'error_type':
-                     self.add_error(f"Comparación '{op}' inválida entre tipos '{left_type}' y '{right_type}'.", node)
-                return 'error_type'
+                    if first_expr_node:
+                        element_type = self._get_expression_type(first_expr_node)
+                        # Aquí podrías añadir un bucle para verificar que todos los elementos son compatibles
+                        # Por ahora, solo usamos el tipo del primero
+                        if element_type != 'error_type':
+                            return f"array<{element_type}>" # Devuelve tipo array
+                        else:
+                            return 'error_type' # Error en elemento
+                    else:
+                        return "array<empty>" # El nodo array_literal no contiene expresiones
+                else:
+                    return "array<empty>" 
 
             elif node.data == 'assignment_expression':
                  # El tipo de una asignación suele ser el tipo del lado izquierdo,
@@ -355,119 +358,137 @@ class SemanticAnalyzer(Visitor):
     # Dentro de la clase SemanticAnalyzer, método variable_declaration
 
     def variable_declaration(self, node):
-        """Procesa la declaración de variables, incluyendo chequeo de tipo explícito."""
         print("\nDEBUG: Entrando a variable_declaration (MODIFICADO)")
-        if not isinstance(node, Tree):
-            print(f"DEBUG: Nodo recibido NO es Tree: {node}")
-            self.add_error("Error interno: Se esperaba un nodo Tree para variable_declaration.", node)
+        print(f"DEBUG: Nodo recibido: Tree(data='{node.data}') con {len(node.children)} hijos: {node.children}")
+
+        # --- Verificar número mínimo de hijos ---
+        if len(node.children) < 2:
+            self.add_error("Estructura inesperada para variable_declaration (faltan tipo y/o identificador).", node)
             return
-        print(f"DEBUG: Nodo recibido: Tree(data='{node.data}') con {len(node.children)} hijos: {node.children}") # Muestra los hijos
 
-        # --- Asumimos la estructura del AST basada en: type identifier ("=" expression)? ---
-        # Ajusta los índices según tu AST real después de cambiar la gramática
-        type_node = node.children[0]        # Nodo que contiene el tipo (e.g., un Tree('type') o Token('int'))
-        identifier_node = node.children[1] # Nodo del identificador
+        type_node = node.children[0]
+        identifier_node = node.children[1]
         expression_node = None
-        assignment_operator_node = None
-        if len(node.children) > 3 and isinstance(node.children[2], Token) and node.children[2].value == '=':
-            assignment_operator_node = node.children[2]
-            expression_node = node.children[3] # Nodo de la expresión de inicialización
-        elif len(node.children) > 2 and isinstance(node.children[2], Tree): # Si la asignación es parte de la expr
-             # Podría ser más complejo, depende de cómo agrupe el parser
-             # Quizás necesites buscar el '=' y la 'expression' de forma más robusta
-             if node.children[2].data == 'expression': # Ejemplo simple
-                  expression_node = node.children[2]
+        assignment_operator_node = None # Guardará el token '=' si existe
+
+        # --- CORREGIR ÍNDICE DE EXPRESIÓN (basado en 4 hijos) ---
+        # Si hay 4 hijos, el tercero es '=' y el cuarto es la expresión
+        if len(node.children) == 4:
+            # Verificar que el hijo en índice 2 sea el '=' (opcional pero bueno)
+            if isinstance(node.children[2], Token) and node.children[2].type == 'EQUAL': # Asume que el token se llama 'EQUAL'
+                assignment_operator_node = node.children[2]
+                expression_node = node.children[3] # La expresión está en el índice 3
+                print(f"  DEBUG: Asignación encontrada. Operador: {assignment_operator_node}, Nodo Expresión: {expression_node.data if isinstance(expression_node, Tree) else expression_node}")
+            else:
+                # Esto sería raro si la gramática siempre pone '=' antes de la expresión
+                 print(f"  WARN: Se esperaban 4 hijos con '=' en índice 2, pero se encontró {node.children[2]}.")
+                 # Podrías intentar tomar el hijo 3 como expresión de todas formas, o dar error
+                 # expression_node = node.children[3] # Intento riesgoso
+        elif len(node.children) == 2:
+            # Solo tipo e identificador, sin inicialización
+            print("  DEBUG: Variable declarada sin inicialización.")
+        else:
+            # Caso inesperado (ej. 3 hijos sin que el 3ro sea una expresión válida?)
+             print(f"  WARN: Número inesperado de hijos ({len(node.children)}) para variable_declaration.")
 
 
-        # --- 1. Extraer Nombre del Identificador ---
+        # --- 1. Extraer Nombre del Identificador (Debería estar OK) ---
         variable_name = None
         identifier_token_for_meta = None
-        # Intenta obtener el token del identificador (puede estar anidado)
-        declared_type = 'desconocido' # Valor por defecto
+        if isinstance(identifier_node, Tree) and identifier_node.data == 'identifier':
+            # ... (la lógica que ya tenías y funcionaba para extraer 'x' o 'y') ...
+            if identifier_node.children and isinstance(identifier_node.children[0], Token):
+                 identifier_token_for_meta = identifier_node.children[0]
+                 variable_name = identifier_token_for_meta.value
+                 print(f"  DEBUG: Nombre de variable extraído: '{variable_name}'")
+            else: print(f"  WARN: Nodo 'identifier' no tiene un Token como primer hijo.")
+        else: print(f"  WARN: Segundo hijo no es un Tree 'identifier'.")
+
+        if not variable_name:
+             self.add_error("No se pudo extraer el nombre de la variable.", identifier_node if identifier_node else node)
+             # return
+
+        # --- 2. Extraer Tipo Declarado Explícitamente (CORREGIDO) ---
+        declared_type = 'desconocido'
         if isinstance(type_node, Tree) and type_node.data == 'type':
+            # Buscar el nodo primitive_type (o composite_type)
+            type_content_node = None
             if type_node.children:
-                child_of_type = type_node.children[0]
-                if isinstance(child_of_type, Tree) and child_of_type.data == 'primitive_type':
-                    # Ahora busca el token dentro de primitive_type
-                    if child_of_type.children and isinstance(child_of_type.children[0], Token):
-                        # Asumiendo que el primer hijo de primitive_type es el Token del tipo (int, float, etc.)
-                        declared_type = child_of_type.children[0].value.lower()
-                        print(f"  DEBUG (get_declared_type): Extraído de primitive_type: '{declared_type}'")
-                    else:
-                        print(f"  WARN (get_declared_type): primitive_type node no tiene un Token como primer hijo.")
-                elif isinstance(child_of_type, Tree) and child_of_type.data == 'composite_type':
-                    # Añade lógica similar si necesitas manejar tipos compuestos (string, array, etc.)
-                    # Ejemplo para string si estuviera definido así:
-                    # if child_of_type.children and isinstance(child_of_type.children[0], Token) and child_of_type.children[0].value == 'string':
-                    #    declared_type = 'string'
-                    print(f"  WARN (get_declared_type): Manejo de composite_type no implementado completamente.")
-                    pass # Implementar si es necesario
-                else:
-                    print(f"  WARN (get_declared_type): Hijo inesperado dentro del nodo 'type': {child_of_type.data if isinstance(child_of_type, Tree) else child_of_type}")
+                 # Asumimos que el primer hijo de 'type' es 'primitive_type' o 'composite_type'
+                 type_content_node = type_node.children[0]
+
+            if isinstance(type_content_node, Tree) and type_content_node.data == 'primitive_type':
+                 # AHORA sí mirar dentro de primitive_type por el Token ('INT', 'FLOAT', etc.)
+                 if type_content_node.children and isinstance(type_content_node.children[0], Token):
+                      type_token = type_content_node.children[0]
+                      # Usa el VALOR del token ('int', 'float', etc.)
+                      declared_type = type_token.value.lower()
+                      print(f"  DEBUG: Tipo declarado extraído de Token dentro de primitive_type: '{declared_type}' (Token: {type_token})")
+                 else:
+                      print(f"  WARN: primitive_type no contenía un Token como primer hijo. Hijos: {type_content_node.children}")
+            # Añadir 'elif' para 'composite_type' si lo manejas
+            # elif isinstance(type_content_node, Tree) and type_content_node.data == 'composite_type':
+            #      # Lógica para extraer tipos compuestos (string, array, etc.)
+            #      pass
             else:
-                print(f"  WARN (get_declared_type): El nodo 'type' no tiene hijos.")
+                 print(f"  WARN: El hijo de 'type' no fue 'primitive_type'. Fue: {type_content_node}")
         else:
-            print(f"  WARN (get_declared_type): Se esperaba un nodo Tree(data='type') como primer hijo de variable_declaration, se obtuvo {type_node}")
+            print(f"  WARN: Primer hijo de variable_declaration no es un Tree 'type'.")
+
+        # Ya no necesitamos la línea redundante con _get_node_text aquí
 
         print(f"DEBUG: Tipo declarado final extraído: '{declared_type}'") # Verifica el resultado final
 
-        # --- 2. Extraer Tipo Declarado Explícitamente ---
-        # Necesitas una función para obtener el texto del tipo desde el nodo 'type_node'
-        # Puede ser simple como _get_node_text o más específica si 'type_node' es complejo
-        declared_type = self._get_node_text(type_node).lower() # ej: "int", "string", "bool"
-        if declared_type == '<type>': # Fallback si _get_node_text no fue específico
-            # Intenta obtenerlo del primer hijo si es un token
-            if isinstance(type_node, Tree) and type_node.children and isinstance(type_node.children[0], Token):
-                 declared_type = type_node.children[0].value.lower()
-            else:
-                 declared_type = 'desconocido' # No se pudo determinar
-
-        print(f"DEBUG: Tipo declarado extraído: '{declared_type}'")
-
-        # --- 3. Procesar Inicialización y Verificar Tipos ---
+        # --- 3. Procesar Inicialización y Verificar Tipos (Usa expression_node corregido) ---
         is_initialized = False
         initial_value_text = None
-        expression_type = None
+        expression_type = None # Inicializar a None
 
-        if expression_node:
-        # ... (obtener expression_type y initial_value_text como antes) ...
-            print(f"DEBUG: Comparando: Declarado='{declared_type}', Expresión='{expression_type}'") # Añade esta línea
-            if expression_type not in ['error_type', 'desconocido'] and declared_type != 'desconocido' and expression_type != declared_type:
-                # Aquí puedes añadir lógica de compatibilidad (ej. asignar int a float)
+        if expression_node: # Solo si se encontró un nodo de expresión (en índice 3)
+            print(f"DEBUG: Procesando nodo de inicialización: {expression_node.data if isinstance(expression_node, Tree) else expression_node}")
+            expression_type = self._get_expression_type(expression_node)
+            initial_value_text = self._get_node_text(expression_node)
+            is_initialized = True
+
+            print(f"DEBUG: Tipo de expresión determinado: '{expression_type}'")
+            print(f"DEBUG: Texto de expresión determinado: '{initial_value_text}'")
+
+            # *** ¡LA COMPARACIÓN CLAVE! ***
+            print(f"DEBUG: Comparando: Declarado='{declared_type}', Expresión='{expression_type}'")
+
+            # Ahora la comparación SÍ debería funcionar si los tipos son correctos
+            if expression_type not in ['error_type', 'desconocido', None] and declared_type != 'desconocido' and expression_type != declared_type:
                 is_compatible = False
-                # Ejemplo: permitir asignar int a float
-                # if declared_type == 'float' and expression_type == 'int':
-                #    is_compatible = True
+                # Añadir lógica de compatibilidad aquí si es necesario (ej. int a float)
+                # if declared_type == 'float' and expression_type == 'int': is_compatible = True
 
                 if not is_compatible:
-                    # Error: El tipo de la expresión no coincide con el tipo declarado
+                    # ¡Este es el error que buscamos!
                     self.add_error(f"Tipo incompatible en inicialización. No se puede asignar tipo '{expression_type}' a la variable '{variable_name}' declarada como '{declared_type}'.",
-                                   assignment_operator_node if assignment_operator_node else expression_node) # Nodo para la línea del error
+                                   expression_node) # Reportar error en la expresión
 
         else:
-            print(f"DEBUG: No se encontró inicialización.")
+            print(f"DEBUG: No se encontró inicialización válida.")
 
-        # --- 4. Añadir Símbolo a la Tabla ---
+        # --- 4. Añadir Símbolo a la Tabla (Debería estar OK) ---
         line = 'N/A'
         if identifier_token_for_meta and hasattr(identifier_token_for_meta, 'line'):
-             line = identifier_token_for_meta.line
-        elif hasattr(node, 'meta') and hasattr(node.meta, 'line'): # Fallback a nodo padre
-             line = node.meta.line
+            line = identifier_token_for_meta.line
+        elif hasattr(node, 'meta') and hasattr(node.meta, 'line'):
+            line = node.meta.line
 
         print(f"DEBUG: Creando SymbolEntry: Nombre='{variable_name}', Tipo='{declared_type}', Línea='{line}', Scope='{self.symbol_table.current_scope.name}', Init={is_initialized}")
-        symbol_entry = SymbolEntry(name=variable_name, kind='variable', sym_type=declared_type, # Usa el tipo DECLARADO
-                                   scope=self.symbol_table.current_scope, line=line,
-                                   initialized=is_initialized, value=initial_value_text) # Guarda el valor literal/texto
 
-        success, error_msg = self.symbol_table.add_symbol(symbol_entry)
-        if not success:
-            print(f"DEBUG: Falló al añadir símbolo '{variable_name}'. Mensaje: {error_msg}")
-            # Usa el token/nodo del identificador para reportar el error de redeclaración
-            self.add_error(error_msg, identifier_token_for_meta if identifier_token_for_meta else node)
+        if variable_name is not None:
+            symbol_entry = SymbolEntry(name=variable_name, kind='variable', sym_type=declared_type,
+                                       scope=self.symbol_table.current_scope, line=line,
+                                       initialized=is_initialized, value=initial_value_text) # Guarda valor/texto
 
-        # No llamar a self.visit(child) explícitamente aquí si ya procesaste todo.
-        # El visitador de Lark se encargará de visitar los hijos si no lo haces tú.
-        # Si procesaste la expresión aquí, podrías querer evitar que se visite de nuevo.
+            success, error_msg = self.symbol_table.add_symbol(symbol_entry)
+            if not success:
+                self.add_error(error_msg, identifier_token_for_meta if identifier_token_for_meta else node)
+        else:
+            print(f"ERROR: No se pudo añadir símbolo porque el nombre es None.")
 
     def constant_declaration(self, node):
         """Procesa la declaración de constantes."""
@@ -1021,6 +1042,9 @@ def analizar():
         # --- END DEBUG ---
 
         salida_texto.insert(tk.END, "--- Análisis Semántico ---\n", "info")
+        print("--- AST Tree ---")
+        print(arbol.pretty())
+        print("----------------")
         semantic_analyzer.start_analysis(arbol)
         semantic_errors = semantic_analyzer.errors 
 
