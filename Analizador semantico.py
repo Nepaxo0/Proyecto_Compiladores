@@ -223,6 +223,8 @@ class SemanticAnalyzer(Visitor):
 
         elif isinstance(node, Tree):
             # --- CORREGIR RECURSIÓN PARA NODO 'expression' ---
+            if node.data == 'arithmetic_expression':
+                return self._check_arithmetic_expression(node)
             if node.data == 'expression':
                 # Asume que 'expression' simplemente envuelve a la expresión real
                 if len(node.children) == 1:
@@ -297,6 +299,8 @@ class SemanticAnalyzer(Visitor):
         # Si no se puede determinar o es un nodo no esperado en una expresión
         # self.add_error(f"No se puede determinar el tipo para el nodo {node.data if isinstance(node, Tree) else node}.", node)
         return 'desconocido' # O 'error_type' si es claramente un problema
+    
+    
     def _get_safe_value(self, node, expected_type=None):
         """Helper para obtener el valor de un Token o el primer Token de un Tree."""
         if isinstance(node, Token):
@@ -699,29 +703,54 @@ class SemanticAnalyzer(Visitor):
 
     def arithmetic_expression(self, node):
         """Verifica operaciones aritméticas."""
-        self._visit_children(node) # Visita operandos primero
-        # La comprobación de tipos se hace en _get_expression_type al evaluar el nodo padre
-        # pero podríamos añadirla aquí también por redundancia o especificidad.
+        self._visit_children(node)  # Visita operandos primero
+        
+        # Obtener tipos de los operandos
         left_type = self._get_expression_type(node.children[0])
         right_type = self._get_expression_type(node.children[2])
         op_node = node.children[1]
-        op_token = self._get_token_from_node(op_node) # Intenta obtener el token del operador
-        op = op_token.value if op_token else f"<{op_node.data if isinstance(op_node, Tree) else '?'}>"
-        op_line_node = op_token if op_token else op_node
+        op = self._get_token_from_node(op_node).value if self._get_token_from_node(op_node) else "?"
 
-        # Ejemplo: División por cero (si es detectable en compilación)
+        # No reportar errores adicionales si ya hay errores en los operandos
+        if left_type == 'error_type' or right_type == 'error_type':
+            return
+
+        # Tipos válidos para operaciones aritméticas
+        numeric_types = ['int', 'float']
+        string_types = ['string']
+        
+        # Manejar operador + para strings (concatenación)
+        if op == '+':
+            if left_type in string_types and right_type in string_types:
+                return  # Concatenación válida
+            elif {left_type, right_type} == {'string', 'int'}:
+                self.add_error(f"No se puede concatenar string con int directamente", op_node)
+                return
+        
+        # Para otros operadores (-, *, /, etc.)
+        if op in ['-', '*', '/', '%']:
+            if left_type not in numeric_types or right_type not in numeric_types:
+                self.add_error(f"Operador '{op}' requiere operandos numéricos, no '{left_type}' y '{right_type}'", op_node)
+                return
+        
+        # Verificar división por cero
         if op == '/':
             right_operand = node.children[2]
-            if isinstance(right_operand, Token) and (right_operand.type == 'INTEGER' or right_operand.type == 'DIGIT'):
-                if int(right_operand.value) == 0:
-                     self.add_error("Posible división por cero detectada en tiempo de compilación.", right_operand)
-            # (Necesitaría evaluación constante más compleja para detectarlo en expresiones)
-
-        # Verificar si el operador es válido para los tipos
-        valid_types = ['int'] # Añadir 'float' si existe
-        if left_type not in valid_types or right_type not in valid_types:
-             if left_type != 'error_type' and right_type != 'error_type': # Evitar errores cascada
-                 self.add_error(f"Operador aritmético '{op}' no se puede aplicar a tipos '{left_type}' y '{right_type}'.", op_node)
+            if isinstance(right_operand, Token) and right_operand.type in ['INTEGER', 'DIGIT']:
+                if float(right_operand.value) == 0:
+                    self.add_error("División por cero detectada", right_operand)
+        
+        # Permitir operaciones entre int y float (conversión implícita)
+        if {left_type, right_type} == {'int', 'float'}:
+            return  # Conversión implícita permitida
+        
+        # Si ambos operandos son del mismo tipo válido
+        if left_type == right_type and left_type in numeric_types:
+            return
+        
+        # Si llegamos aquí, es una combinación no válida
+        if left_type != right_type:
+            self.add_error(f"Tipos incompatibles: '{left_type}' {op} '{right_type}'", op_node)
 
 
     def relational_expression(self, node):
