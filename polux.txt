@@ -11,7 +11,9 @@ comment_text: char+
 
 
 char: /[^\"]/  // Cualquier carácter excepto comillas dobles
-identifier: LETTER (LETTER | DIGIT | "_")*
+char_in_single_quotes: /[^']/
+char_literal: "'" char_in_single_quotes "'"
+identifier: /[a-zA-Z][a-zA-Z0-9_]*/
 identifier_list: "[" identifier ("," identifier)* "]"
 
 primitive_type: "int" | "float" | "bool" | "char"
@@ -23,7 +25,7 @@ variable_declaration: type identifier ("=" expression)?
 constant_declaration: "cte" identifier "=" expression 
 array_literal: "[" expression ("," expression)* "]"
 
-expression: identifier | integer | string_literal | booleano | arithmetic_expression | logical_expression | assignment_expression | relational_expression |instance_creation | array_literal | grouped_expression 
+expression: identifier | integer | string_literal | booleano | arithmetic_expression | logical_expression | assignment_expression | relational_expression |instance_creation | array_literal | grouped_expression  | char_literal
 
 
 arithmetic_expression: expression arithmetic_operator expression

@@ -462,6 +462,9 @@ class SemanticAnalyzer(Visitor):
                 # Añadir lógica de compatibilidad aquí si es necesario (ej. int a float)
                 # if declared_type == 'float' and expression_type == 'int': is_compatible = True
 
+                if declared_type == 'float' and expression_type == 'int':
+                    is_compatible = True 
+
                 if not is_compatible:
                     # ¡Este es el error que buscamos!
                     self.add_error(f"Tipo incompatible en inicialización. No se puede asignar tipo '{expression_type}' a la variable '{variable_name}' declarada como '{declared_type}'.",
