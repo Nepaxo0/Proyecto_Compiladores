@@ -222,19 +222,37 @@ class SemanticAnalyzer(Visitor):
             # Añade más tipos de tokens si es necesario
 
         elif isinstance(node, Tree):
-            # --- CORREGIR RECURSIÓN PARA NODO 'expression' ---
-            if node.data == 'arithmetic_expression':
-                return self._check_arithmetic_expression(node)
-            if node.data == 'expression':
-                # Asume que 'expression' simplemente envuelve a la expresión real
-                if len(node.children) == 1:
-                    # Llama recursivamente con la misma función _get_expression_type
-                    return self._get_expression_type(node.children[0])
-                else:
-                    # Si 'expression' puede tener operadores, etc., necesitas lógica aquí
-                    # Por ahora, si no es un simple envoltorio, marca como desconocido/error
-                    print(f"WARN (_get_expression_type): Nodo 'expression' tiene {len(node.children)} hijos, se esperaba 1.")
-                    return 'desconocido' # O 'error_type' si es un error seguro
+            if node.data == 'expression' and len(node.children) == 1:
+                return self._get_expression_type(node.children[0])
+                
+            elif node.data == 'arithmetic_expression':
+                left_type = self._get_expression_type(node.children[0])
+                right_type = self._get_expression_type(node.children[2])
+                
+                if 'error_type' in [left_type, right_type]:
+                    return 'error_type'
+                
+                # Obtener operador de forma segura
+                op_node = node.children[1]
+                op = self._get_operator_text(op_node)
+                
+                if op == '+':
+                    if left_type == 'string' and right_type == 'string':
+                        return 'string'
+                    elif left_type in ['int', 'float'] and right_type in ['int', 'float']:
+                        return 'float' if 'float' in [left_type, right_type] else 'int'
+                    else:
+                        self.add_error(f"No se puede sumar {left_type} con {right_type}", op_node)
+                        return 'error_type'
+                        
+                elif op in ['-', '*', '/', '%']:
+                    if left_type in ['int', 'float'] and right_type in ['int', 'float']:
+                        return 'float' if 'float' in [left_type, right_type] else 'int'
+                    else:
+                        self.add_error(f"Operador '{op}' no válido para {left_type} y {right_type}", op_node)
+                        return 'error_type'
+                
+                return 'error_type ' #error_type' si es un error seguro
 
             # --- AÑADIR CASO PARA 'array_literal' ---
             elif node.data == 'array_literal':
@@ -295,6 +313,27 @@ class SemanticAnalyzer(Visitor):
                     return f"array<{element_type}>"
                 else:
                     return "array<empty>" # O un tipo genérico
+                
+            elif node.data == 'arithmetic_expression':
+                left_type = self._get_expression_type(node.children[0])
+                right_type = self._get_expression_type(node.children[2])
+                
+                # Si hay errores en los operandos, propagar el error
+                if left_type == 'error_type' or right_type == 'error_type':
+                    return 'error_type'
+                
+                # Manejar operador +
+                if node.children[1].data == 'arithmetic_operator' and '+':
+                    if left_type == 'string' and right_type == 'string':
+                        return 'string'
+                    elif left_type in ['int', 'float'] and right_type in ['int', 'float']:
+                        return 'float' if 'float' in [left_type, right_type] else 'int'
+                
+                # Manejar otros operadores
+                if left_type in ['int', 'float'] and right_type in ['int', 'float']:
+                    return 'float' if 'float' in [left_type, right_type] else 'int'
+                
+                return 'error_type'
         
         # Si no se puede determinar o es un nodo no esperado en una expresión
         # self.add_error(f"No se puede determinar el tipo para el nodo {node.data if isinstance(node, Tree) else node}.", node)
@@ -700,6 +739,15 @@ class SemanticAnalyzer(Visitor):
          self._visit_children(node)
          # Podrías añadir verificaciones generales de expresión aquí si es necesario
 
+    def _get_operator_text(self, node):
+        """Obtiene el texto del operador de forma segura"""
+        if isinstance(node, Token):
+            return node.value
+        elif isinstance(node, Tree):
+            # Asume que el operador es el primer hijo si es un Tree
+            if node.children and isinstance(node.children[0], Token):
+                return node.children[0].value
+        return "?"  # Valor por defecto si no se puede determinar
 
     def arithmetic_expression(self, node):
         """Verifica operaciones aritméticas."""
@@ -708,9 +756,9 @@ class SemanticAnalyzer(Visitor):
         # Obtener tipos de los operandos
         left_type = self._get_expression_type(node.children[0])
         right_type = self._get_expression_type(node.children[2])
+        
         op_node = node.children[1]
-        op = self._get_token_from_node(op_node).value if self._get_token_from_node(op_node) else "?"
-
+        op = self._get_operator_text(op_node) 
         # No reportar errores adicionales si ya hay errores en los operandos
         if left_type == 'error_type' or right_type == 'error_type':
             return
