@@ -224,6 +224,29 @@ class SemanticAnalyzer(Visitor):
         elif isinstance(node, Tree):
             if node.data == 'expression' and len(node.children) == 1:
                 return self._get_expression_type(node.children[0])
+            
+            elif node.data == 'identifier':
+                # Asegurarse de que el nodo identifier tiene un hijo y es un Token
+                if node.children and isinstance(node.children[0], Token):
+                    token = node.children[0]
+                    identifier_name = token.value
+                    # Buscar el identificador en la tabla de símbolos
+                    symbol = self.symbol_table.lookup(identifier_name)
+                    if symbol:
+                        print(f"DEBUG (_get_expression_type -> identifier): Símbolo '{identifier_name}' encontrado. Tipo: {symbol.sym_type}") # Debug útil
+                        
+                        if not symbol.initialized:
+                            self.add_error(f"Variable '{identifier_name}' usada antes de ser inicializada.", token)
+                            return 'error_type'
+                        return symbol.sym_type
+                    else:
+                        # Error: El identificador existe en el AST pero no en la tabla
+                        self.add_error(f"Identificador '{identifier_name}' no declarado.", token)
+                        return 'error_type'
+                else:
+                    # Error estructural en el AST para el nodo identifier
+                    self.add_error("Estructura de nodo 'identifier' inesperada (no contiene Token).", node)
+                    return 'error_type'
                 
             elif node.data == 'arithmetic_expression':
                 left_type = self._get_expression_type(node.children[0])
@@ -254,7 +277,7 @@ class SemanticAnalyzer(Visitor):
                 
                 return 'error_type ' #error_type' si es un error seguro
 
-            # --- AÑADIR CASO PARA 'array_literal' ---
+           
             elif node.data == 'array_literal':
                 if node.children:
                     # Intentar determinar el tipo basado en el primer elemento
@@ -292,7 +315,6 @@ class SemanticAnalyzer(Visitor):
             elif node.data == 'integer': return 'int'
             elif node.data == 'string_literal': return 'string'
             elif node.data == 'booleano': return 'bool'
-            # ... añadir más casos para otros tipos de nodos de expresión ...
             elif node.data == 'method_call':
                  # Buscar la función y devolver su tipo de retorno declarado
                  func_name = self._get_node_text(node.children[0]) # Asumiendo estructura simple
@@ -334,9 +356,7 @@ class SemanticAnalyzer(Visitor):
                     return 'float' if 'float' in [left_type, right_type] else 'int'
                 
                 return 'error_type'
-        
-        # Si no se puede determinar o es un nodo no esperado en una expresión
-        # self.add_error(f"No se puede determinar el tipo para el nodo {node.data if isinstance(node, Tree) else node}.", node)
+       
         return 'desconocido' # O 'error_type' si es claramente un problema
     
     
@@ -386,19 +406,12 @@ class SemanticAnalyzer(Visitor):
                  # Llamada recursiva: Asegúrate que el hijo también se maneje
                  return self.determinar_tipo(nodo_valor.children[0])
             else:
-                 # Estructura de árbol no manejada o vacía
-                 # print(f"Debug: Tree no manejado en determinar_tipo: {nodo_valor.pretty()}") # Debug
+                
                  return "ERROR_TIPO_DESCONOCIDO"
         
-        # --- Caso por defecto / Error ---
-        # Si nodo_valor no es ni Token ni Tree (podría ser None, u otro tipo inesperado)
-        # print(f"Debug: Tipo inesperado en determinar_tipo: {type(nodo_valor)}") # Debug
         return "ERROR_TIPO_DESCONOCIDO"
     
-    # --- Visitor Methods ---
-
-
-    # Dentro de la clase SemanticAnalyzer, método variable_declaration
+   
 
     def variable_declaration(self, node):
         print("\nDEBUG: Entrando a variable_declaration (MODIFICADO)")
@@ -414,8 +427,6 @@ class SemanticAnalyzer(Visitor):
         expression_node = None
         assignment_operator_node = None # Guardará el token '=' si existe
 
-        # --- CORREGIR ÍNDICE DE EXPRESIÓN (basado en 4 hijos) ---
-        # Si hay 4 hijos, el tercero es '=' y el cuarto es la expresión
         if len(node.children) == 4:
             # Verificar que el hijo en índice 2 sea el '=' (opcional pero bueno)
             if isinstance(node.children[2], Token) and node.children[2].type == 'EQUAL': # Asume que el token se llama 'EQUAL'
@@ -425,8 +436,7 @@ class SemanticAnalyzer(Visitor):
             else:
                 # Esto sería raro si la gramática siempre pone '=' antes de la expresión
                  print(f"  WARN: Se esperaban 4 hijos con '=' en índice 2, pero se encontró {node.children[2]}.")
-                 # Podrías intentar tomar el hijo 3 como expresión de todas formas, o dar error
-                 # expression_node = node.children[3] # Intento riesgoso
+                
         elif len(node.children) == 2:
             # Solo tipo e identificador, sin inicialización
             print("  DEBUG: Variable declarada sin inicialización.")
@@ -434,12 +444,9 @@ class SemanticAnalyzer(Visitor):
             # Caso inesperado (ej. 3 hijos sin que el 3ro sea una expresión válida?)
              print(f"  WARN: Número inesperado de hijos ({len(node.children)}) para variable_declaration.")
 
-
-        # --- 1. Extraer Nombre del Identificador (Debería estar OK) ---
         variable_name = None
         identifier_token_for_meta = None
         if isinstance(identifier_node, Tree) and identifier_node.data == 'identifier':
-            # ... (la lógica que ya tenías y funcionaba para extraer 'x' o 'y') ...
             if identifier_node.children and isinstance(identifier_node.children[0], Token):
                  identifier_token_for_meta = identifier_node.children[0]
                  variable_name = identifier_token_for_meta.value
@@ -451,7 +458,6 @@ class SemanticAnalyzer(Visitor):
              self.add_error("No se pudo extraer el nombre de la variable.", identifier_node if identifier_node else node)
              # return
 
-        # --- 2. Extraer Tipo Declarado Explícitamente (CORREGIDO) ---
         declared_type = 'desconocido'
         if isinstance(type_node, Tree) and type_node.data == 'type':
             # Buscar el nodo primitive_type (o composite_type)
@@ -469,10 +475,9 @@ class SemanticAnalyzer(Visitor):
                       print(f"  DEBUG: Tipo declarado extraído de Token dentro de primitive_type: '{declared_type}' (Token: {type_token})")
                  else:
                       print(f"  WARN: primitive_type no contenía un Token como primer hijo. Hijos: {type_content_node.children}")
-            # Añadir 'elif' para 'composite_type' si lo manejas
-            # elif isinstance(type_content_node, Tree) and type_content_node.data == 'composite_type':
-            #      # Lógica para extraer tipos compuestos (string, array, etc.)
-            #      pass
+           
+            elif isinstance(type_content_node, Tree) and type_content_node.data == 'composite_type':
+                pass
             else:
                  print(f"  WARN: El hijo de 'type' no fue 'primitive_type'. Fue: {type_content_node}")
         else:
@@ -724,21 +729,17 @@ class SemanticAnalyzer(Visitor):
                  print(f"DEBUG (assign): Actualizado tipo para '{target_name}' a '{value_type}'")
 
     def identifier(self, node):
-         """Verifica el uso de identificadores en expresiones."""
-         # Este método se llamará si 'identifier' es un nodo del árbol (no solo un Token)
-         # Si 'identifier' es solo un Token, la verificación se hará dentro de _get_expression_type
-         # o en el contexto donde se use (ej: method_call).
-         # Asumamos que 'identifier' es un Token que se procesa en otros nodos.
-         pass # La lógica principal está en lookup y _get_expression_type
+        #print(f"DEBUG: visitando nodo identifier genérico: {node.children[0].value if node.children else 'sin hijos'}")
+        pass
 
 
     def expression(self, node):
          """Visita nodos de expresión para asegurar que los hijos se visiten."""
          # Llama al visitador genérico para los hijos, lo que activará
          # arithmetic_expression, logical_expression, etc.
-         self._visit_children(node)
+         #self._visit_children(node)
          # Podrías añadir verificaciones generales de expresión aquí si es necesario
-
+        
     def _get_operator_text(self, node):
         """Obtiene el texto del operador de forma segura"""
         if isinstance(node, Token):
@@ -750,7 +751,7 @@ class SemanticAnalyzer(Visitor):
         return "?"  # Valor por defecto si no se puede determinar
 
     def arithmetic_expression(self, node):
-        """Verifica operaciones aritméticas."""
+        """
         self._visit_children(node)  # Visita operandos primero
         
         # Obtener tipos de los operandos
@@ -800,7 +801,8 @@ class SemanticAnalyzer(Visitor):
         if left_type != right_type:
             self.add_error(f"Tipos incompatibles: '{left_type}' {op} '{right_type}'", op_node)
 
-
+    """""
+        pass
     def relational_expression(self, node):
          """Verifica operaciones relacionales."""
          self._visit_children(node)
@@ -948,8 +950,7 @@ class SemanticAnalyzer(Visitor):
         if not success:
             # Error de redeclaración de función (o variable con mismo nombre)
             self.add_error(error_msg, func_token)
-            # Podríamos no continuar con el cuerpo si hay error de declaración
-            # return
+            return
 
 
         # --- Entrar al Ámbito de la Función ---
@@ -972,26 +973,18 @@ class SemanticAnalyzer(Visitor):
         else:
              self.add_error(f"Función '{func_name}' declarada pero no tiene cuerpo.", func_token)
 
-
-        # --- Salir del Ámbito de la Función ---
         self.symbol_table.pop_scope()
         self.current_function = previous_function # Restaurar función anterior (si estábamos anidados)
 
         # TODO: Verificación de retorno (requiere análisis de flujo o al menos buscar 'return')
-        # Necesitaría un flag 'has_return_statement' que se active al visitar un 'return'
-        # if function_symbol.return_type != 'void' and not hasattr(function_symbol, '_has_return'):
-        #    self.add_error(f"Función '{func_name}' debe retornar un valor de tipo '{function_symbol.return_type}', pero no se encontró sentencia 'return'.", func_token)
+        if function_symbol.return_type != 'void' and not hasattr(function_symbol, '_has_return'):
+           self.add_error(f"Función '{func_name}' debe retornar un valor de tipo '{function_symbol.return_type}', pero no se encontró sentencia 'return'.", func_token)
 
 
     def method_call(self, node):
-        """Verifica llamadas a funciones/métodos."""
-        # Asumiendo: identifier "(" argument_list? ")"  O obj.method(...)
-        # Simplificado a: identifier "(" argument_list? ")"
+
         func_token = self._get_token_from_node(node.children[0], 'IDENTIFIER')
         if not func_token:
-             # Podría ser una llamada más compleja como obj.method()
-             # Necesitarías manejar 'member_access' aquí o en _get_expression_type
-             # Por ahora, asumimos llamada simple
              self.add_error("Error interno: No se encontró el identificador de la función en la llamada.", node.children[0])
              # Visitar argumentos igualmente para detectar errores dentro de ellos
              if len(node.children) > 1 and isinstance(node.children[1], Tree) and node.children[1].data == 'argument_list':
@@ -1046,21 +1039,14 @@ class SemanticAnalyzer(Visitor):
                    if not is_compatible:
                        self.add_error(f"Llamada a '{func_name}': Argumento {i+1} incompatible. Se esperaba tipo '{formal_type}', pero se encontró tipo '{actual_type}'.", arg_node)
 
-
-    # Añadir más métodos visit_* para class_declaration, control_structure, print_statement, etc.
-    # según tu gramática y las validaciones necesarias.
-
-    # Helper para visitar hijos (evita repetición)
     def _visit_children(self, node):
         for child in node.children:
             if isinstance(child, Tree):
                 self.visit(child)
-            # Podrías querer visitar Tokens específicos si contienen identificadores a verificar
-            # elif isinstance(child, Token) and child.type == 'IDENTIFIER':
-            #    self.check_identifier_usage(child)
+            elif isinstance(child, Token) and child.type == 'IDENTIFIER':
+                self.check_identifier_usage(child)
 
 
-    # --- Ejemplo de Verificación de Uso ---
     def check_identifier_usage(self, token):
          """Llamado cuando se encuentra un IDENTIFIER en un contexto de uso."""
          identifier = token.value
@@ -1069,21 +1055,11 @@ class SemanticAnalyzer(Visitor):
               self.add_error(f"Identificador '{identifier}' no declarado.", token)
          else:
               symbol.references += 1
-              # Comprobar inicialización (si no es el lado izquierdo de una asignación)
-              # Necesita contexto para saber si es LHS.
-              # if not symbol.initialized and not self._is_lhs_of_assignment(token):
-              #     self.add_error(f"Variable '{identifier}' usada antes de ser inicializada.", token)
+              if not symbol.initialized and not self._is_lhs_of_assignment(token):
+                self.add_error(f"Variable '{identifier}' usada antes de ser inicializada.", token)
 
-# (Dentro de Analizador sintactico.py)
 
-# ... (importaciones y código anterior) ...
-
-# Instancia global del analizador semántico (o crearla dentro de analizar)
 semantic_analyzer = SemanticAnalyzer()
-# La tabla de símbolos ahora la maneja el semantic_analyzer internamente
-# global tabla_simbolos # Ya no necesitamos la tabla global antigua
-
-# ... (Clase SymbolEntry, Scope, SymbolTableManager, SemanticAnalyzer) ...
 
 
 # Función para analizar código y mostrar errores en la interfaz
@@ -1114,12 +1090,10 @@ def analizar():
                 print(f"{indent}Node: {node.data}")
                 for child in node.children:
                     print_node_names(child, indent + "  ")
-            # Optional: print tokens too
-            # elif isinstance(node, Token):
-            #    print(f"{indent}Token: {node.type} ({node.value})")
+           
         print_node_names(arbol)
         print("------------------------------------\n")
-        # --- END DEBUG ---
+
 
         salida_texto.insert(tk.END, "--- Análisis Semántico ---\n", "info")
         print("--- AST Tree ---")
@@ -1194,10 +1168,6 @@ def mostrar_tabla_simbolos():
         ventana_tabla.title("Tabla de Símbolos (Semántica)")
         ventana_tabla.geometry("1400x700") # Más ancha para más columnas
         ventana_tabla.configure(bg="white")
-
-        # Usar los símbolos del último análisis semántico exitoso (si hubo)
-        # Idealmente, 'analizar' debería guardar la tabla si no hay errores
-        # Por ahora, la obtenemos directamente del analizador
         simbolos = semantic_analyzer.symbol_table.get_all_symbols() # Obtener todos los símbolos de todos los ámbitos
 
         if not simbolos:
@@ -1279,7 +1249,7 @@ def mostrar_tabla_simbolos():
         traceback.print_exc()
 
 
-# ... (resto de la configuración de la UI: ventana, frame, widgets, mainloop) ...
+
 ventana = tk.Tk()
 ventana.title("Analizador Sintáctico - Polux")
 ventana.geometry("900x600")
@@ -1317,8 +1287,5 @@ salida_texto.tag_configure("success", foreground="green")
 salida_texto.tag_configure("info", foreground="blue")
 salida_texto.tag_configure("error", foreground="red")
 
-# Asegúrate de reemplazar la llamada a extraer_simbolos y la tabla_simbolos global antigua
-# por el uso del semantic_analyzer.
 
-# Ejecutar la aplicación
 ventana.mainloop()
